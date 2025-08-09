@@ -186,3 +186,6 @@ config.json
 .env.local
 .env.production
 secrets.toml
+
+# References and external code (not part of main codebase)
+references/
