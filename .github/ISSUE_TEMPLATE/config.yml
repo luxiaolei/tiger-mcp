@@ -1,0 +1,21 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/tiger-mcp/tiger-mcp/discussions
+    about: Ask questions, share ideas, and discuss the Tiger MCP System with the community
+
+  - name: 🔒 Security Issues (Private)
+    url: mailto:security@tiger-mcp.com
+    about: Report critical security vulnerabilities privately via email
+
+  - name: 📞 Support
+    url: https://github.com/tiger-mcp/tiger-mcp/wiki/Support
+    about: Get help with installation, configuration, and usage questions
+
+  - name: 🗺️ Roadmap
+    url: https://github.com/tiger-mcp/tiger-mcp/projects
+    about: View the project roadmap and planned features
+
+  - name: 📖 Documentation
+    url: https://tiger-mcp.github.io/tiger-mcp
+    about: Browse the complete documentation and guides

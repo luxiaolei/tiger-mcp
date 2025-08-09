@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "tiger-mcp-test": {
+      "command": "uv",
+      "args": ["run", "--package", "mcp-server", "python", "-m", "mcp_server.main"],
+      "cwd": "/Volumes/extdisk/MyRepos/cctrading-ws/tiger-mcp",
+      "env": {
+        "TIGER_CLIENT_ID": "test_client_123",
+        "TIGER_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\ntest_private_key_content\n-----END PRIVATE KEY-----",
+        "TIGER_ACCOUNT": "88888888",
+        "TIGER_SANDBOX": "true",
+        "TIGER_LICENSE": "TBHK",
+        "LOG_LEVEL": "INFO",
+        "TIGER_USE_DATABASE": "false"
+      }
+    }
+  }
+}

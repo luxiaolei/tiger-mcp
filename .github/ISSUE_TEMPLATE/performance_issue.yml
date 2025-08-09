@@ -1,0 +1,318 @@
+name: ⚡ Performance Issue
+description: Report a performance problem or optimization opportunity in the Tiger MCP System
+title: "[PERFORMANCE] "
+labels: ["performance", "needs-triage"]
+assignees: ["performance-team"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a performance issue! Please provide detailed information to help us identify and resolve performance problems.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight Checklist
+      description: Please confirm you have completed the following
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have verified this occurs consistently, not just during high load periods
+          required: true
+        - label: I have gathered relevant performance data and metrics
+          required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component has the performance issue?
+      options:
+        - MCP Server
+        - Dashboard API
+        - Database Queries
+        - Shared Libraries
+        - Tiger API Integration
+        - Docker/Infrastructure
+        - CI/CD Pipeline
+        - User Interface
+        - Network/Communication
+        - Multiple Components
+    validations:
+      required: true
+
+  - type: dropdown
+    id: performance_type
+    attributes:
+      label: Performance Issue Type
+      description: What type of performance issue is this?
+      options:
+        - Response Time (API/Service too slow)
+        - Throughput (Low requests/transactions per second)
+        - Resource Usage (High CPU/Memory/Disk)
+        - Database Performance (Slow queries)
+        - Memory Leak
+        - Network Latency
+        - Load Time (UI/Page loading)
+        - Scalability Issue
+        - Resource Contention
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Performance Issue Description
+      description: Describe the performance problem you're experiencing
+      placeholder: |
+        Provide a clear description of:
+        - What operation or workflow is slow
+        - When you first noticed the issue
+        - Whether it's getting worse over time
+        - Any patterns you've observed
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_performance
+    attributes:
+      label: Current Performance Metrics
+      description: What performance are you currently experiencing?
+      placeholder: |
+        Provide specific metrics such as:
+        - Response times (p50, p95, p99)
+        - Throughput (requests per second)
+        - Resource utilization (CPU %, Memory %, Disk I/O)
+        - Error rates
+        - Query execution times
+        
+        Example:
+        - API response time: 5.2s (p95)
+        - CPU usage: 85% constant
+        - Memory usage: 12GB out of 16GB
+        - Database query: 8.3s average
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_performance
+    attributes:
+      label: Expected Performance
+      description: What performance do you expect or require?
+      placeholder: |
+        Specify your performance expectations:
+        - Target response times
+        - Required throughput
+        - Acceptable resource usage
+        - SLA requirements
+        
+        Example:
+        - API response time: <500ms (p95)
+        - CPU usage: <70%
+        - Memory usage: <8GB
+        - Database query: <1s
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this performance issue?
+      placeholder: |
+        Provide detailed steps:
+        1. Setup/configuration needed
+        2. Specific actions to perform
+        3. Load conditions or data volume
+        4. How to measure the performance
+        5. Environment details
+      value: |
+        1. 
+        2. 
+        3. 
+        4. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Provide details about your environment
+      render: yaml
+      placeholder: |
+        Version: v1.0.0 or commit hash
+        Environment: development/staging/production
+        Hardware:
+          CPU: 8 cores, 2.4GHz
+          Memory: 32GB
+          Storage: SSD, 500GB
+        Operating System: Ubuntu 20.04
+        Python: 3.11.5
+        Database: PostgreSQL 15.4
+        Load: Concurrent users, data volume
+        Network: Connection speed, latency
+    validations:
+      required: true
+
+  - type: textarea
+    id: performance_data
+    attributes:
+      label: Performance Data
+      description: Include performance metrics, logs, or profiling data
+      render: text
+      placeholder: |
+        Attach or paste:
+        - Performance monitoring graphs/charts
+        - Profiling results
+        - System resource usage graphs
+        - Database query plans
+        - Application logs with timing
+        - Network trace data
+        - Load testing results
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact Severity
+      description: How severe is the impact of this performance issue?
+      options:
+        - Critical (System unusable, major business impact)
+        - High (Significant user experience degradation)
+        - Medium (Noticeable performance degradation)
+        - Low (Minor performance concern)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequency
+      description: How often does this performance issue occur?
+      options:
+        - Always (Consistent performance problem)
+        - Often (Occurs regularly under normal load)
+        - Sometimes (Intermittent, occurs under specific conditions)
+        - Rarely (Occurs only under high load or edge cases)
+    validations:
+      required: true
+
+  - type: textarea
+    id: load_conditions
+    attributes:
+      label: Load Conditions
+      description: Under what load conditions does this issue occur?
+      placeholder: |
+        Describe the load conditions when performance degrades:
+        - Number of concurrent users
+        - Data volume being processed
+        - Request rate (requests per second)
+        - Time of day patterns
+        - Specific operations or workflows
+        - Database record counts
+
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Performance Timeline
+      description: When did you first notice this issue? Has it changed over time?
+      placeholder: |
+        - When did this issue start?
+        - Has performance degraded gradually or suddenly?
+        - Any recent changes that might be related?
+        - Performance trends over time
+
+  - type: checkboxes
+    id: investigation
+    attributes:
+      label: Investigation Done
+      description: What investigation have you already performed?
+      options:
+        - label: Checked system resource usage (CPU, Memory, Disk)
+        - label: Analyzed application logs for errors or patterns
+        - label: Reviewed database query performance
+        - label: Monitored network usage and latency
+        - label: Compared performance across different environments
+        - label: Tested with different load levels
+        - label: Profiled the application code
+        - label: Checked for memory leaks
+
+  - type: textarea
+    id: attempted_solutions
+    attributes:
+      label: Attempted Solutions
+      description: What have you tried to resolve this performance issue?
+      placeholder: |
+        List any solutions you've attempted:
+        - Configuration changes
+        - Code optimizations
+        - Database optimizations
+        - Infrastructure changes
+        - Caching strategies
+        - Load balancing adjustments
+
+  - type: textarea
+    id: bottleneck_analysis
+    attributes:
+      label: Bottleneck Analysis
+      description: Do you have insights into where the bottleneck might be?
+      placeholder: |
+        Based on your investigation:
+        - Which layer seems to be the bottleneck? (Database, API, Network, etc.)
+        - Are there specific functions or operations that are slow?
+        - Resource constraints identified?
+        - Potential root causes?
+
+  - type: textarea
+    id: monitoring_data
+    attributes:
+      label: Monitoring and Alerting
+      description: What monitoring data is available?
+      placeholder: |
+        Include information about:
+        - Monitoring tools in use
+        - Available metrics and dashboards
+        - Alerting thresholds
+        - Historical performance data
+        - Comparison with baseline performance
+
+  - type: textarea
+    id: business_impact
+    attributes:
+      label: Business Impact
+      description: What is the business impact of this performance issue?
+      placeholder: |
+        Describe the impact on:
+        - User experience and satisfaction
+        - Business operations
+        - Revenue or cost implications
+        - Compliance or SLA requirements
+        - Team productivity
+
+  - type: textarea
+    id: suggested_optimizations
+    attributes:
+      label: Suggested Optimizations
+      description: Do you have suggestions for improving performance?
+      placeholder: |
+        Suggestions might include:
+        - Code optimizations
+        - Database query improvements
+        - Caching strategies
+        - Infrastructure scaling
+        - Architecture changes
+        - Configuration tuning
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any additional information that might be helpful
+      placeholder: |
+        Include any other relevant information:
+        - Related performance issues
+        - Dependencies that might be affecting performance
+        - Seasonal patterns or trends
+        - Third-party service dependencies
+        - Recent deployments or changes

@@ -1,0 +1,184 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: tiger-mcp-postgres-dev
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tiger_mcp_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-tiger_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tiger_dev_password}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./packages/database/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tiger_user} -d ${POSTGRES_DB:-tiger_mcp_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+
+  # Redis Cache and Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: tiger-mcp-redis-dev
+    command: redis-server --appendonly yes --appendfsync everysec
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data_dev:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+
+  # Database Migration Service
+  db-migrate:
+    build:
+      context: .
+      dockerfile: ./docker/database/Dockerfile
+      target: production
+    container_name: tiger-mcp-db-migrate-dev
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tiger_user}:${POSTGRES_PASSWORD:-tiger_dev_password}@postgres:5432/${POSTGRES_DB:-tiger_mcp_dev}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tiger-mcp-network
+    command: ["python", "manage_db.py", "upgrade"]
+
+  # MCP Server
+  mcp-server:
+    build:
+      context: .
+      dockerfile: ./docker/mcp-server/Dockerfile
+      target: production
+    container_name: tiger-mcp-server-dev
+    environment:
+      # Tiger API Configuration
+      - TIGER_CLIENT_ID=${TIGER_CLIENT_ID}
+      - TIGER_PRIVATE_KEY=${TIGER_PRIVATE_KEY}
+      - TIGER_ACCOUNT=${TIGER_ACCOUNT}
+      - TIGER_SANDBOX=${TIGER_SANDBOX:-true}
+      
+      # Database Configuration
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tiger_user}:${POSTGRES_PASSWORD:-tiger_dev_password}@postgres:5432/${POSTGRES_DB:-tiger_mcp_dev}
+      
+      # Cache Configuration  
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Application Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - DEBUG=${DEBUG:-true}
+      - ENVIRONMENT=development
+      
+      # Security
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+    volumes:
+      - ./logs:/app/logs
+      - ./packages/mcp-server/src:/app:ro  # Development volume mount
+    ports:
+      - "${MCP_SERVER_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/mcp-server/src
+          target: /app
+
+  # Dashboard API
+  dashboard-api:
+    build:
+      context: .
+      dockerfile: ./docker/dashboard-api/Dockerfile
+      target: production
+    container_name: tiger-mcp-api-dev
+    environment:
+      # Database Configuration
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tiger_user}:${POSTGRES_PASSWORD:-tiger_dev_password}@postgres:5432/${POSTGRES_DB:-tiger_mcp_dev}
+      
+      # Cache Configuration
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Security
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      
+      # CORS Configuration
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:3001","http://127.0.0.1:3000"]
+      
+      # Application Configuration
+      - DEBUG=${DEBUG:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - ENVIRONMENT=development
+    volumes:
+      - ./logs:/app/logs
+      - ./packages/dashboard-api/src:/app:ro  # Development volume mount
+    ports:
+      - "${DASHBOARD_API_PORT:-8001}:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/dashboard-api/src
+          target: /app
+
+volumes:
+  postgres_data_dev:
+    name: tiger-mcp-postgres-data-dev
+  redis_data_dev:
+    name: tiger-mcp-redis-data-dev
+
+networks:
+  tiger-mcp-network:
+    name: tiger-mcp-network-dev
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

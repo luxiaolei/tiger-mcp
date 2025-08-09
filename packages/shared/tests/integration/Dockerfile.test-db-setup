@@ -1,0 +1,108 @@
+# Test Database Setup Dockerfile
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONPATH=/app/packages/shared:/app
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy project files
+COPY . /app/
+
+# Install Python dependencies for database setup
+RUN pip install --no-cache-dir \
+    asyncpg \
+    sqlalchemy[asyncio] \
+    alembic \
+    psycopg2-binary
+
+# Install shared package
+RUN pip install -e packages/shared/
+
+# Create setup script
+RUN cat > setup_test_db.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Setup test database schema and initial data.
+"""
+
+import asyncio
+import os
+import sys
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.sql import text
+
+# Add shared package to path
+sys.path.insert(0, '/app/packages/shared/src')
+
+async def setup_database():
+    """Set up test database schema."""
+    database_url = os.getenv('DATABASE_URL', 'postgresql+asyncpg://tiger_test:tiger_test@postgres-test:5432/tiger_mcp_test')
+    
+    print(f"Setting up test database: {database_url}")
+    
+    # Create async engine
+    engine = create_async_engine(database_url, echo=True)
+    
+    try:
+        # Import database models
+        from database.models.base import Base
+        from database.models.accounts import TigerAccount, AccountType, AccountStatus, MarketPermission
+        from database.models.token_status import TokenStatus, TokenRefreshStatus
+        from database.models.api_keys import APIKey
+        
+        print("Creating database schema...")
+        
+        # Create all tables
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        
+        print("Database schema created successfully!")
+        
+        # Create test indexes for performance
+        async with AsyncSession(engine) as session:
+            # Add any custom indexes here
+            await session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_tiger_accounts_account_number 
+                ON tiger_accounts(account_number);
+            """))
+            
+            await session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_tiger_accounts_status 
+                ON tiger_accounts(status);
+            """))
+            
+            await session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_token_statuses_account_id 
+                ON token_statuses(tiger_account_id);
+            """))
+            
+            await session.commit()
+        
+        print("Database indexes created successfully!")
+        
+    except Exception as e:
+        print(f"Error setting up database: {e}")
+        sys.exit(1)
+    
+    finally:
+        await engine.dispose()
+    
+    print("Test database setup completed!")
+
+if __name__ == "__main__":
+    asyncio.run(setup_database())
+EOF
+
+# Make setup script executable
+RUN chmod +x setup_test_db.py
+
+# Default command
+CMD ["python", "setup_test_db.py"]

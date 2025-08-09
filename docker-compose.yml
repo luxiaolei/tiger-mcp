@@ -1,0 +1,148 @@
+# Tiger MCP Docker Compose - Legacy Configuration
+# This file is kept for backwards compatibility.
+# For new deployments, use:
+#   - docker-compose.dev.yml for development
+#   - docker-compose.prod.yml for production
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: tiger-mcp-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tiger_mcp}
+      POSTGRES_USER: ${POSTGRES_USER:-tiger_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tiger_password}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/database/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tiger_user} -d ${POSTGRES_DB:-tiger_mcp}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+
+  # Redis Cache and Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: tiger-mcp-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+
+  # Database Migration Service
+  db-migrate:
+    build:
+      context: .
+      dockerfile: ./docker/database/Dockerfile
+      target: production
+    container_name: tiger-mcp-db-migrate
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tiger_user}:${POSTGRES_PASSWORD:-tiger_password}@postgres:5432/${POSTGRES_DB:-tiger_mcp}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tiger-mcp-network
+    command: ["python", "manage_db.py", "upgrade"]
+
+  # MCP Server
+  mcp-server:
+    build:
+      context: .
+      dockerfile: ./docker/mcp-server/Dockerfile
+      target: production
+    container_name: tiger-mcp-server
+    environment:
+      - TIGER_CLIENT_ID=${TIGER_CLIENT_ID}
+      - TIGER_PRIVATE_KEY=${TIGER_PRIVATE_KEY}
+      - TIGER_ACCOUNT=${TIGER_ACCOUNT}
+      - TIGER_SANDBOX=${TIGER_SANDBOX:-true}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tiger_user}:${POSTGRES_PASSWORD:-tiger_password}@postgres:5432/${POSTGRES_DB:-tiger_mcp}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
+      - DEBUG=${DEBUG:-false}
+    volumes:
+      - ./logs:/app/logs
+    ports:
+      - "${MCP_SERVER_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+
+  # Dashboard API
+  dashboard-api:
+    build:
+      context: .
+      dockerfile: ./docker/dashboard-api/Dockerfile
+      target: production
+    container_name: tiger-mcp-dashboard-api
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tiger_user}:${POSTGRES_PASSWORD:-tiger_password}@postgres:5432/${POSTGRES_DB:-tiger_mcp}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./logs:/app/logs
+    ports:
+      - "${DASHBOARD_API_PORT:-8001}:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: tiger-mcp-postgres-data
+  redis_data:
+    name: tiger-mcp-redis-data
+
+networks:
+  tiger-mcp-network:
+    name: tiger-mcp-network
+    driver: bridge

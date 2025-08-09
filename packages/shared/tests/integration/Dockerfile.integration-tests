@@ -1,0 +1,41 @@
+# Integration Tests Dockerfile
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONPATH=/app/packages/shared:/app
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    postgresql-client \
+    redis-tools \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy project files
+COPY . /app/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r packages/shared/tests/integration/requirements-test.txt
+
+# Install shared package in development mode
+RUN pip install -e packages/shared/
+
+# Create test results directory
+RUN mkdir -p /app/test_results
+
+# Create non-root user for security
+RUN useradd -m -u 1000 testuser && \
+    chown -R testuser:testuser /app
+
+USER testuser
+
+# Default command
+CMD ["python", "-m", "pytest", "packages/shared/tests/integration/", "-v"]

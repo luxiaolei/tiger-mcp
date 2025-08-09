@@ -1,0 +1,276 @@
+# Tiger MCP System - Code Ownership and Review Requirements
+# This file defines code ownership for the Tiger MCP monorepo using UV workspace
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ===========================================================================
+# GLOBAL DEFAULT OWNERSHIP
+# ===========================================================================
+
+# All files require review from maintainers unless specifically overridden
+* @tiger-mcp-maintainers
+
+# ===========================================================================
+# ROOT CONFIGURATION FILES
+# ===========================================================================
+
+# UV Workspace and Python configuration
+/pyproject.toml @tiger-mcp-maintainers @backend-leads @python-specialists
+/uv.lock @tiger-mcp-maintainers @backend-leads
+/.python-version @backend-leads
+/requirements*.txt @backend-leads
+
+# Docker orchestration
+/docker-compose*.yml @tiger-mcp-maintainers @devops-team @infrastructure-leads
+/Makefile @tiger-mcp-maintainers @devops-team
+
+# Environment configuration templates
+/.env.template @tiger-mcp-maintainers @devops-team @security-team
+/.env.prod.template @tiger-mcp-maintainers @devops-team @security-team
+/.env.example @devops-team @security-team
+
+# Git configuration
+/.gitignore @tiger-mcp-maintainers
+/.gitattributes @tiger-mcp-maintainers
+
+# ===========================================================================
+# DOCUMENTATION
+# ===========================================================================
+
+# Main documentation
+/README.md @tiger-mcp-maintainers @technical-writers @product-team
+/CHANGELOG.md @tiger-mcp-maintainers @technical-writers @release-managers
+/CONTRIBUTING.md @tiger-mcp-maintainers @technical-writers
+/SECURITY.md @tiger-mcp-maintainers @security-team @technical-writers
+/LICENSE @tiger-mcp-maintainers @legal-team
+
+# Documentation directory
+/docs/ @technical-writers @tiger-mcp-maintainers
+/docs/API_REFERENCE.md @backend-team @technical-writers @api-specialists
+/docs/QUICK_START_GUIDE.md @technical-writers @product-team
+/docs/DEPLOYMENT.md @devops-team @technical-writers
+/docs/DOCKER.md @devops-team @technical-writers @docker-specialists
+/docs/TROUBLESHOOTING.md @support-team @technical-writers
+
+# Package-specific documentation
+/packages/*/README.md @technical-writers @backend-team
+/packages/*/CHANGELOG.md @technical-writers @backend-team
+
+# ===========================================================================
+# UV WORKSPACE PACKAGES
+# ===========================================================================
+
+# MCP Server Package
+/packages/mcp-server/ @backend-team @mcp-leads @tiger-api-specialists
+/packages/mcp-server/src/mcp_server/ @backend-team @mcp-leads
+/packages/mcp-server/src/mcp_server/tools/ @backend-team @tools-specialists @tiger-api-specialists
+/packages/mcp-server/src/mcp_server/models/ @backend-team @data-modelers
+/packages/mcp-server/src/mcp_server/config/ @backend-team @security-team
+/packages/mcp-server/tests/ @backend-team @qa-team
+/packages/mcp-server/pyproject.toml @backend-leads @mcp-leads
+
+# Dashboard API Package
+/packages/dashboard-api/ @backend-team @api-leads @frontend-api-specialists
+/packages/dashboard-api/src/dashboard_api/ @backend-team @api-leads
+/packages/dashboard-api/src/dashboard_api/routes/ @backend-team @api-leads @api-specialists
+/packages/dashboard-api/src/dashboard_api/models/ @backend-team @data-modelers
+/packages/dashboard-api/src/dashboard_api/middleware/ @backend-team @security-team
+/packages/dashboard-api/src/dashboard_api/config/ @backend-team @security-team
+/packages/dashboard-api/tests/ @backend-team @qa-team
+/packages/dashboard-api/pyproject.toml @backend-leads @api-leads
+
+# Database Package
+/packages/database/ @backend-team @database-team @data-engineers
+/packages/database/src/database/models/ @backend-team @database-team @data-modelers
+/packages/database/src/database/migrations/ @database-team @data-engineers
+/packages/database/src/database/schemas/ @database-team @data-modelers
+/packages/database/src/database/utils/ @database-team @backend-team
+/packages/database/alembic.ini @database-team
+/packages/database/manage_db.py @database-team @backend-leads
+/packages/database/tests/ @database-team @qa-team
+/packages/database/pyproject.toml @backend-leads @database-team
+
+# Shared Package
+/packages/shared/ @backend-team @shared-libs-maintainers @architecture-team
+/packages/shared/src/shared/ @backend-team @shared-libs-maintainers
+/packages/shared/src/shared/models/ @backend-team @data-modelers
+/packages/shared/src/shared/utils/ @backend-team @shared-libs-maintainers
+/packages/shared/src/shared/types/ @backend-team @type-specialists
+/packages/shared/tests/ @backend-team @qa-team
+/packages/shared/pyproject.toml @backend-leads @shared-libs-maintainers
+
+# ===========================================================================
+# DOCKER CONFIGURATION
+# ===========================================================================
+
+# Docker root directory
+/docker/ @devops-team @docker-specialists @infrastructure-team
+
+# Service-specific Docker configurations
+/docker/mcp-server/ @devops-team @backend-team @mcp-leads
+/docker/mcp-server/Dockerfile @devops-team @backend-team @security-team
+/docker/dashboard-api/ @devops-team @backend-team @api-leads  
+/docker/dashboard-api/Dockerfile @devops-team @backend-team @security-team
+/docker/database/ @devops-team @database-team @data-engineers
+/docker/database/Dockerfile @devops-team @database-team @security-team
+
+# Infrastructure services
+/docker/nginx/ @devops-team @infrastructure-team @security-team
+/docker/redis/ @devops-team @infrastructure-team @caching-specialists
+/docker/postgres/ @devops-team @database-team @data-engineers
+
+# Docker configuration files
+/docker/*/docker-compose*.yml @devops-team @infrastructure-team
+/docker/*/.dockerignore @devops-team @backend-team
+
+# ===========================================================================
+# SCRIPTS AND AUTOMATION
+# ===========================================================================
+
+# Build and deployment scripts
+/scripts/ @devops-team @automation-team
+/scripts/build.sh @devops-team @build-specialists @security-team
+/scripts/start.sh @devops-team @infrastructure-team
+/scripts/stop.sh @devops-team @infrastructure-team
+/scripts/logs.sh @devops-team @monitoring-team
+/scripts/backup.sh @devops-team @database-team @security-team
+/scripts/restore.sh @devops-team @database-team @security-team
+
+# ===========================================================================
+# CI/CD AND GITHUB CONFIGURATION
+# ===========================================================================
+
+# GitHub configuration directory
+/.github/ @devops-team @ci-cd-maintainers @tiger-mcp-maintainers
+
+# Workflow files
+/.github/workflows/ @devops-team @ci-cd-maintainers
+/.github/workflows/ci.yml @devops-team @ci-cd-maintainers @backend-leads @qa-leads
+/.github/workflows/cd.yml @devops-team @ci-cd-maintainers @release-managers @security-team
+/.github/workflows/security.yml @devops-team @security-team @ci-cd-maintainers
+/.github/workflows/docs.yml @devops-team @technical-writers @ci-cd-maintainers
+
+# GitHub configuration files
+/.github/dependabot.yml @devops-team @security-team @dependency-managers
+/.github/CODEOWNERS @tiger-mcp-maintainers @devops-team
+/.github/pull_request_template.md @tiger-mcp-maintainers @process-team
+/.github/ISSUE_TEMPLATE/ @tiger-mcp-maintainers @support-team
+
+# GitHub Actions reusable workflows
+/.github/actions/ @devops-team @ci-cd-maintainers
+
+# ===========================================================================
+# SECURITY AND SENSITIVE FILES
+# ===========================================================================
+
+# Secrets directory (should be in .gitignore but defining ownership)
+/secrets/ @security-team @tiger-mcp-maintainers
+/secrets/README.md @security-team
+
+# Environment files
+*.env @security-team @devops-team @tiger-mcp-maintainers
+*.env.* @security-team @devops-team @tiger-mcp-maintainers
+
+# Configuration files with security implications
+*config*.py @backend-team @security-team
+*config*.yml @devops-team @security-team
+*config*.yaml @devops-team @security-team
+*config*.json @backend-team @security-team
+
+# SSL/TLS configuration
+/docker/ssl/ @security-team @devops-team @infrastructure-team
+*.pem @security-team @devops-team
+*.key @security-team @devops-team
+*.crt @security-team @devops-team
+
+# ===========================================================================
+# TIGER BROKERS INTEGRATION
+# ===========================================================================
+
+# Tiger API references and integration code
+/references/ @integration-team @tiger-api-specialists @backend-team
+/references/openapi-python-sdk/ @integration-team @tiger-api-specialists
+/references/tiger_api_docs.md @integration-team @technical-writers @api-specialists
+
+# Tiger-specific configuration and tools
+/packages/*/src/*/tiger_*.py @integration-team @tiger-api-specialists @backend-team
+/packages/mcp-server/src/mcp_server/tools/tiger_*.py @integration-team @tiger-api-specialists @tools-specialists
+
+# ===========================================================================
+# TESTING
+# ===========================================================================
+
+# Test directories and files
+**/tests/ @qa-team @backend-team
+**/test_*.py @qa-team @backend-team
+*/conftest.py @qa-team @backend-team @test-infrastructure-team
+
+# Integration and E2E tests
+/tests/integration/ @qa-team @backend-team @integration-team
+/tests/e2e/ @qa-team @frontend-team @backend-team
+
+# Performance tests
+/tests/performance/ @qa-team @performance-team @backend-team
+**/performance/ @performance-team @qa-team
+
+# ===========================================================================
+# MONITORING AND OBSERVABILITY
+# ===========================================================================
+
+# Monitoring configuration
+/monitoring/ @devops-team @sre-team @monitoring-specialists
+**/monitoring/ @devops-team @sre-team
+
+# Logging configuration
+**/logging.conf @devops-team @backend-team @monitoring-specialists
+**/log_config.py @backend-team @monitoring-specialists
+
+# ===========================================================================
+# DATA AND MIGRATIONS
+# ===========================================================================
+
+# Database migrations (require careful review)
+/packages/database/src/database/migrations/*.py @database-team @data-engineers @backend-leads
+
+# Data fixtures and seeds
+/packages/database/src/database/fixtures/ @database-team @data-engineers
+/packages/database/src/database/seeds/ @database-team @data-engineers
+
+# ===========================================================================
+# SPECIAL OWNERSHIP RULES (Multiple Required Reviewers)
+# ===========================================================================
+
+# Critical production files (require multiple approvals)
+/docker-compose.prod.yml @tiger-mcp-maintainers @devops-team @security-team @release-managers
+
+# Production deployment workflow (require multiple approvals)
+/.github/workflows/cd.yml @tiger-mcp-maintainers @devops-team @release-managers @security-team
+
+# Security scanning workflow (require security team + devops approval)
+/.github/workflows/security.yml @security-team @devops-team @ci-cd-maintainers
+
+# Database schema changes (require database team + backend lead approval)
+/packages/database/src/database/models/*.py @database-team @backend-leads @data-modelers
+
+# Core shared utilities (require shared libs team + architecture review)
+/packages/shared/src/shared/core/ @shared-libs-maintainers @architecture-team @backend-leads
+
+# Tiger API integration core (require integration specialists + security review)
+/packages/mcp-server/src/mcp_server/tiger_integration/ @integration-team @tiger-api-specialists @security-team
+
+# Production secrets and SSL configuration (require security + maintainer approval)
+/docker/ssl/production/ @security-team @tiger-mcp-maintainers @devops-team
+/secrets/production/ @security-team @tiger-mcp-maintainers
+
+# Build and release scripts (require maintainer + devops + security approval)
+/scripts/build.sh @tiger-mcp-maintainers @devops-team @security-team @build-specialists
+/scripts/deploy.sh @tiger-mcp-maintainers @devops-team @security-team @release-managers
+
+# ===========================================================================
+# PACKAGE MANAGEMENT (UV-SPECIFIC)
+# ===========================================================================
+
+# UV workspace lock file changes
+/uv.lock @backend-leads @dependency-managers @security-team
+
+# Package version updates in pyproject.toml files
+/packages/*/pyproject.toml @backend-leads @dependency-managers

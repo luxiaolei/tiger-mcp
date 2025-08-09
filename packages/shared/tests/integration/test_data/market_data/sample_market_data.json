@@ -1,0 +1,263 @@
+{
+  "symbols": {
+    "AAPL": {
+      "symbol": "AAPL",
+      "name": "Apple Inc.",
+      "latest_price": 150.25,
+      "prev_close": 149.80,
+      "open": 150.00,
+      "high": 151.50,
+      "low": 149.75,
+      "volume": 45678900,
+      "change": 0.45,
+      "change_rate": 0.003,
+      "market_cap": 2450000000000,
+      "pe_ratio": 28.5,
+      "dividend_yield": 0.0048,
+      "sector": "Technology",
+      "industry": "Consumer Electronics",
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "timestamp": 1640995200000
+    },
+    "MSFT": {
+      "symbol": "MSFT",
+      "name": "Microsoft Corporation",
+      "latest_price": 330.75,
+      "prev_close": 329.50,
+      "open": 330.00,
+      "high": 332.25,
+      "low": 329.00,
+      "volume": 23456789,
+      "change": 1.25,
+      "change_rate": 0.0038,
+      "market_cap": 2470000000000,
+      "pe_ratio": 30.2,
+      "dividend_yield": 0.0068,
+      "sector": "Technology",
+      "industry": "Software",
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "timestamp": 1640995200000
+    },
+    "GOOGL": {
+      "symbol": "GOOGL",
+      "name": "Alphabet Inc Class A",
+      "latest_price": 2750.50,
+      "prev_close": 2745.25,
+      "open": 2748.00,
+      "high": 2755.75,
+      "low": 2742.50,
+      "volume": 1234567,
+      "change": 5.25,
+      "change_rate": 0.0019,
+      "market_cap": 1830000000000,
+      "pe_ratio": 25.8,
+      "dividend_yield": 0.0,
+      "sector": "Technology",
+      "industry": "Internet Services",
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "timestamp": 1640995200000
+    },
+    "AMZN": {
+      "symbol": "AMZN",
+      "name": "Amazon.com Inc",
+      "latest_price": 3350.25,
+      "prev_close": 3345.80,
+      "open": 3348.00,
+      "high": 3365.50,
+      "low": 3340.75,
+      "volume": 3456789,
+      "change": 4.45,
+      "change_rate": 0.0013,
+      "market_cap": 1700000000000,
+      "pe_ratio": 52.4,
+      "dividend_yield": 0.0,
+      "sector": "Consumer Discretionary",
+      "industry": "Internet Retail",
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "timestamp": 1640995200000
+    },
+    "TSLA": {
+      "symbol": "TSLA",
+      "name": "Tesla Inc",
+      "latest_price": 1050.75,
+      "prev_close": 1076.25,
+      "open": 1065.00,
+      "high": 1078.50,
+      "low": 1048.25,
+      "volume": 28456789,
+      "change": -25.50,
+      "change_rate": -0.0237,
+      "market_cap": 1050000000000,
+      "pe_ratio": 175.6,
+      "dividend_yield": 0.0,
+      "sector": "Consumer Discretionary", 
+      "industry": "Auto Manufacturers",
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "timestamp": 1640995200000
+    },
+    "META": {
+      "symbol": "META",
+      "name": "Meta Platforms Inc",
+      "latest_price": 325.80,
+      "prev_close": 328.45,
+      "open": 327.00,
+      "high": 330.75,
+      "low": 324.50,
+      "volume": 18765432,
+      "change": -2.65,
+      "change_rate": -0.0081,
+      "market_cap": 875000000000,
+      "pe_ratio": 22.1,
+      "dividend_yield": 0.0,
+      "sector": "Technology",
+      "industry": "Social Media",
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "timestamp": 1640995200000
+    },
+    "NVDA": {
+      "symbol": "NVDA",
+      "name": "NVIDIA Corporation", 
+      "latest_price": 285.50,
+      "prev_close": 283.25,
+      "open": 284.00,
+      "high": 288.75,
+      "low": 282.50,
+      "volume": 35467891,
+      "change": 2.25,
+      "change_rate": 0.0079,
+      "market_cap": 710000000000,
+      "pe_ratio": 45.8,
+      "dividend_yield": 0.0012,
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "timestamp": 1640995200000
+    },
+    "NFLX": {
+      "symbol": "NFLX",
+      "name": "Netflix Inc",
+      "latest_price": 598.25,
+      "prev_close": 595.80,
+      "open": 597.00,
+      "high": 603.50,
+      "low": 594.25,
+      "volume": 4567891,
+      "change": 2.45,
+      "change_rate": 0.0041,
+      "market_cap": 265000000000,
+      "pe_ratio": 36.7,
+      "dividend_yield": 0.0,
+      "sector": "Communication Services",
+      "industry": "Entertainment",
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "timestamp": 1640995200000
+    }
+  },
+  "sectors": {
+    "Technology": {
+      "sector_name": "Technology",
+      "market_cap": 8905000000000,
+      "day_change": 0.0045,
+      "symbol_count": 5,
+      "top_performers": ["NVDA", "MSFT", "GOOGL"],
+      "worst_performers": ["META"]
+    },
+    "Consumer Discretionary": {
+      "sector_name": "Consumer Discretionary",
+      "market_cap": 2750000000000,
+      "day_change": -0.0112,
+      "symbol_count": 2,
+      "top_performers": ["AMZN"],
+      "worst_performers": ["TSLA"]
+    },
+    "Communication Services": {
+      "sector_name": "Communication Services",
+      "market_cap": 265000000000,
+      "day_change": 0.0041,
+      "symbol_count": 1,
+      "top_performers": ["NFLX"],
+      "worst_performers": []
+    }
+  },
+  "market_indices": {
+    "SPY": {
+      "symbol": "SPY",
+      "name": "SPDR S&P 500 ETF Trust",
+      "latest_price": 475.25,
+      "change": 2.15,
+      "change_rate": 0.0045,
+      "volume": 78945623
+    },
+    "QQQ": {
+      "symbol": "QQQ", 
+      "name": "Invesco QQQ Trust",
+      "latest_price": 385.75,
+      "change": 3.25,
+      "change_rate": 0.0085,
+      "volume": 45678912
+    },
+    "IWM": {
+      "symbol": "IWM",
+      "name": "iShares Russell 2000 ETF",
+      "latest_price": 225.50,
+      "change": -1.25,
+      "change_rate": -0.0055,
+      "volume": 23456789
+    }
+  },
+  "options_data": {
+    "AAPL": {
+      "symbol": "AAPL",
+      "expiration_dates": ["2024-01-19", "2024-02-16", "2024-03-15"],
+      "call_options": [
+        {
+          "strike": 150.0,
+          "expiration": "2024-01-19",
+          "bid": 2.50,
+          "ask": 2.65,
+          "last": 2.55,
+          "volume": 1250,
+          "open_interest": 5678,
+          "implied_volatility": 0.285
+        },
+        {
+          "strike": 155.0,
+          "expiration": "2024-01-19", 
+          "bid": 0.85,
+          "ask": 0.95,
+          "last": 0.90,
+          "volume": 2345,
+          "open_interest": 8901,
+          "implied_volatility": 0.295
+        }
+      ],
+      "put_options": [
+        {
+          "strike": 145.0,
+          "expiration": "2024-01-19",
+          "bid": 1.25,
+          "ask": 1.35,
+          "last": 1.30,
+          "volume": 987,
+          "open_interest": 3456,
+          "implied_volatility": 0.275
+        }
+      ]
+    }
+  },
+  "real_time_feeds": {
+    "last_update": 1640995200000,
+    "update_frequency": "real-time",
+    "data_providers": ["NYSE", "NASDAQ", "CBOE"],
+    "latency_ms": 15,
+    "quality": "Level 1"
+  }
+}

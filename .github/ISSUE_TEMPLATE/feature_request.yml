@@ -1,0 +1,283 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement for the Tiger MCP System
+title: "[FEATURE] "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest a new feature! Please provide as much detail as possible to help us understand and evaluate your request.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight Checklist
+      description: Please confirm you have completed the following
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have reviewed the roadmap and planned features
+          required: true
+        - label: This feature aligns with the project's goals and scope
+          required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this feature primarily affect?
+      options:
+        - MCP Server
+        - Dashboard API
+        - Database
+        - Shared Libraries
+        - Docker/Infrastructure
+        - CI/CD
+        - Documentation
+        - Tiger API Integration
+        - User Interface
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Feature Type
+      description: What type of feature is this?
+      options:
+        - New Functionality
+        - Enhancement to Existing Feature
+        - Performance Improvement
+        - Developer Experience
+        - User Experience
+        - Integration
+        - Security Enhancement
+        - Monitoring/Observability
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: A brief, clear summary of the proposed feature
+      placeholder: In one or two sentences, describe what you'd like to see added or improved
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? What pain point does it address?
+      placeholder: |
+        Describe the current limitation, inefficiency, or missing functionality that this feature would address.
+        
+        Example:
+        - Current workflow requires manual steps that could be automated
+        - Users frequently request information that isn't easily accessible
+        - Performance bottlenecks in specific scenarios
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed solution in detail
+      placeholder: |
+        Provide a detailed description of how you envision this feature working.
+        
+        Consider:
+        - User interface changes
+        - API modifications
+        - New workflows or processes
+        - Integration points
+        - Configuration options
+    validations:
+      required: true
+
+  - type: textarea
+    id: user_stories
+    attributes:
+      label: User Stories
+      description: Provide user stories that illustrate how this feature would be used
+      placeholder: |
+        As a [type of user], I want [goal] so that [benefit].
+        
+        Example:
+        - As a trader, I want to see real-time portfolio performance metrics so that I can make informed decisions quickly
+        - As a developer, I want automated error recovery so that I can focus on building features instead of manual interventions
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: What alternatives have you considered?
+      placeholder: |
+        Describe any alternative approaches or workarounds you've considered:
+        - Different implementation approaches
+        - Existing tools or services that could be used
+        - Manual processes currently being used
+        - Why these alternatives are insufficient
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature?
+      options:
+        - Critical (Blocking major use cases)
+        - High (Significant improvement to user experience)
+        - Medium (Nice to have, moderate impact)
+        - Low (Minor convenience feature)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: How complex do you think this feature would be to implement?
+      options:
+        - Low (Small change, few components affected)
+        - Medium (Moderate change, some design needed)
+        - High (Significant change, multiple components)
+        - Very High (Major feature, extensive design and development)
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What would define this feature as "done"?
+      placeholder: |
+        List specific, measurable criteria that would indicate this feature is complete:
+        
+        - [ ] User can perform X action
+        - [ ] System responds within Y seconds
+        - [ ] Feature works on all supported platforms
+        - [ ] Documentation is updated
+        - [ ] Tests are implemented with >80% coverage
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical_requirements
+    attributes:
+      label: Technical Requirements
+      description: Any specific technical requirements or considerations?
+      placeholder: |
+        Consider:
+        - Performance requirements (response times, throughput)
+        - Security requirements
+        - Compatibility requirements
+        - Scalability needs
+        - Integration requirements
+        - Data storage needs
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups/Wireframes
+      description: If applicable, provide mockups, wireframes, or visual examples
+      placeholder: |
+        Attach images or provide links to:
+        - UI mockups
+        - Workflow diagrams
+        - API specifications
+        - Architecture diagrams
+
+  - type: checkboxes
+    id: considerations
+    attributes:
+      label: Implementation Considerations
+      description: Check all that apply to this feature
+      options:
+        - label: Requires database schema changes
+        - label: Requires API changes (breaking or non-breaking)
+        - label: Requires UI/UX changes
+        - label: Affects security model
+        - label: Requires new dependencies
+        - label: Affects performance
+        - label: Requires configuration changes
+        - label: Affects existing workflows
+
+  - type: textarea
+    id: testing_strategy
+    attributes:
+      label: Testing Strategy
+      description: How should this feature be tested?
+      placeholder: |
+        Consider:
+        - Unit tests needed
+        - Integration tests needed
+        - Performance tests needed
+        - User acceptance tests needed
+        - Edge cases to consider
+
+  - type: textarea
+    id: documentation_needs
+    attributes:
+      label: Documentation Needs
+      description: What documentation would need to be created or updated?
+      placeholder: |
+        - User guides
+        - API documentation
+        - Developer documentation
+        - Configuration guides
+        - Troubleshooting guides
+
+  - type: dropdown
+    id: breaking_changes
+    attributes:
+      label: Breaking Changes
+      description: Would this feature require breaking changes?
+      options:
+        - No breaking changes expected
+        - Minor breaking changes (with migration path)
+        - Major breaking changes required
+        - Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: migration_plan
+    attributes:
+      label: Migration Plan
+      description: If breaking changes are required, describe the migration plan
+      placeholder: |
+        If this feature requires breaking changes:
+        - What would need to be migrated?
+        - How would existing users transition?
+        - What tools or scripts would be needed?
+        - What deprecation timeline would be appropriate?
+
+  - type: textarea
+    id: success_metrics
+    attributes:
+      label: Success Metrics
+      description: How would you measure the success of this feature?
+      placeholder: |
+        Examples:
+        - Reduced time to complete workflow X by Y%
+        - Increased user satisfaction score
+        - Reduced support tickets for issue Z
+        - Improved system performance metrics
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any additional context, research, or information
+      placeholder: |
+        - Links to relevant research or documentation
+        - Examples from other systems
+        - Business justification
+        - Timeline considerations
+        - Related features or dependencies

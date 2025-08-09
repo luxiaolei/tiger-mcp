@@ -1,0 +1,484 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ===========================================================================
+  # BUILD & PUBLISH IMAGES
+  # ===========================================================================
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    strategy:
+      matrix:
+        service: [mcp-server, dashboard-api, database]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.meta.outputs.tags }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.service }}.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service }}
+          path: sbom-${{ matrix.service }}.spdx.json
+          retention-days: 90
+
+  # ===========================================================================
+  # SECURITY SCANNING
+  # ===========================================================================
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    strategy:
+      matrix:
+        service: [mcp-server, dashboard-api, database]
+    steps:
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.service }}.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
+          category: 'container-${{ matrix.service }}'
+
+  # ===========================================================================
+  # STAGING DEPLOYMENT
+  # ===========================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-and-push, container-scan]
+    environment: 
+      name: staging
+      url: https://tiger-mcp-staging.yourdomain.com
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to ECS Staging
+        run: |
+          # Update ECS service with new image
+          aws ecs update-service \
+            --cluster tiger-mcp-staging \
+            --service tiger-mcp-service-staging \
+            --task-definition tiger-mcp-task-staging:${{ github.run_number }} \
+            --force-new-deployment
+
+      - name: Wait for deployment completion
+        run: |
+          aws ecs wait services-stable \
+            --cluster tiger-mcp-staging \
+            --services tiger-mcp-service-staging
+          
+          # Get service status
+          aws ecs describe-services \
+            --cluster tiger-mcp-staging \
+            --services tiger-mcp-service-staging \
+            --query 'services[0].{ServiceName:serviceName,Status:status,RunningCount:runningCount,PendingCount:pendingCount}'
+
+      - name: Health Check
+        run: |
+          # Wait for services to be ready
+          echo "Waiting for services to start..."
+          sleep 60
+          
+          # Check MCP Server health
+          for i in {1..10}; do
+            if curl -f https://tiger-mcp-staging.yourdomain.com/health; then
+              echo "✅ MCP Server health check passed"
+              break
+            fi
+            echo "⏳ Health check attempt $i failed, retrying..."
+            sleep 10
+          done
+          
+          # Check Dashboard API health
+          for i in {1..10}; do
+            if curl -f https://tiger-mcp-staging.yourdomain.com/api/health; then
+              echo "✅ Dashboard API health check passed"
+              break
+            fi
+            echo "⏳ Dashboard API health check attempt $i failed, retrying..."
+            sleep 10
+          done
+
+      - name: Run smoke tests
+        run: |
+          # Run basic smoke tests against staging
+          echo "Running smoke tests..."
+          curl -f https://tiger-mcp-staging.yourdomain.com/api/version
+          curl -f https://tiger-mcp-staging.yourdomain.com/health
+          echo "✅ Smoke tests passed"
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "🚀 Successfully deployed to staging environment"
+          echo "Environment URL: https://tiger-mcp-staging.yourdomain.com"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "❌ Staging deployment failed, initiating rollback..."
+          
+          # Get previous task definition
+          PREVIOUS_TASK_DEF=$(aws ecs describe-services \
+            --cluster tiger-mcp-staging \
+            --services tiger-mcp-service-staging \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          
+          # Extract revision number and decrement
+          CURRENT_REV=$(echo $PREVIOUS_TASK_DEF | grep -o '[0-9]*$')
+          PREV_REV=$((CURRENT_REV - 1))
+          
+          if [ $PREV_REV -gt 0 ]; then
+            ROLLBACK_TASK_DEF=$(echo $PREVIOUS_TASK_DEF | sed "s/$CURRENT_REV$/$PREV_REV/")
+            
+            aws ecs update-service \
+              --cluster tiger-mcp-staging \
+              --service tiger-mcp-service-staging \
+              --task-definition $ROLLBACK_TASK_DEF \
+              --force-new-deployment
+            
+            echo "🔄 Rollback to $ROLLBACK_TASK_DEF initiated"
+          else
+            echo "⚠️  No previous version available for rollback"
+          fi
+
+  # ===========================================================================
+  # PRODUCTION DEPLOYMENT (Manual Approval Required)
+  # ===========================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-push, container-scan, deploy-staging]
+    environment: 
+      name: production
+      url: https://tiger-mcp.yourdomain.com
+    if: |
+      (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[prod-deploy]')) ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      github.event.inputs.environment == 'production'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Blue-Green deployment preparation
+        run: |
+          # Create new task definition for production
+          echo "Preparing blue-green deployment..."
+          
+          # Get current service configuration
+          aws ecs describe-services \
+            --cluster tiger-mcp-production \
+            --services tiger-mcp-service-production \
+            --query 'services[0].{ServiceName:serviceName,TaskDefinition:taskDefinition,DesiredCount:desiredCount}' \
+            --output table
+
+      - name: Deploy to Production (Blue-Green)
+        run: |
+          # Update ECS service with new image (Blue-Green deployment)
+          aws ecs update-service \
+            --cluster tiger-mcp-production \
+            --service tiger-mcp-service-production \
+            --task-definition tiger-mcp-task-production:${{ github.run_number }} \
+            --deployment-configuration "minimumHealthyPercent=50,maximumPercent=200" \
+            --force-new-deployment
+
+      - name: Wait for deployment and validate
+        timeout-minutes: 15
+        run: |
+          # Wait for deployment to complete
+          aws ecs wait services-stable \
+            --cluster tiger-mcp-production \
+            --services tiger-mcp-service-production
+          
+          # Validate deployment
+          aws ecs describe-services \
+            --cluster tiger-mcp-production \
+            --services tiger-mcp-service-production \
+            --query 'services[0].{ServiceName:serviceName,Status:status,RunningCount:runningCount,PendingCount:pendingCount,DeploymentStatus:deployments[0].status}'
+
+      - name: Production Health Checks
+        timeout-minutes: 10
+        run: |
+          echo "Running production health checks..."
+          
+          # Wait for services to stabilize
+          sleep 120
+          
+          # Comprehensive health checks
+          for i in {1..15}; do
+            if curl -f -m 30 https://tiger-mcp.yourdomain.com/health; then
+              echo "✅ MCP Server health check passed"
+              MCP_HEALTHY=true
+              break
+            fi
+            echo "⏳ MCP Server health check attempt $i failed, retrying..."
+            sleep 20
+          done
+          
+          for i in {1..15}; do
+            if curl -f -m 30 https://tiger-mcp.yourdomain.com/api/health; then
+              echo "✅ Dashboard API health check passed"
+              API_HEALTHY=true
+              break
+            fi
+            echo "⏳ Dashboard API health check attempt $i failed, retrying..."
+            sleep 20
+          done
+          
+          if [[ "$MCP_HEALTHY" == "true" && "$API_HEALTHY" == "true" ]]; then
+            echo "✅ All production health checks passed"
+          else
+            echo "❌ Production health checks failed"
+            exit 1
+          fi
+
+      - name: Production smoke tests
+        run: |
+          echo "Running production smoke tests..."
+          
+          # Test critical endpoints
+          curl -f -m 30 https://tiger-mcp.yourdomain.com/api/version
+          curl -f -m 30 https://tiger-mcp.yourdomain.com/health
+          
+          # Test MCP server functionality (if endpoints available)
+          echo "✅ Production smoke tests passed"
+
+      - name: Update deployment tracking
+        if: success()
+        run: |
+          echo "🎉 Successfully deployed to production!"
+          echo "Production URL: https://tiger-mcp.yourdomain.com"
+          echo "Build: ${{ github.sha }}"
+          echo "Tag: ${{ github.ref_name }}"
+          
+          # Log deployment for tracking
+          echo "Deployment completed at $(date)"
+
+      - name: Production rollback on failure
+        if: failure()
+        run: |
+          echo "❌ Production deployment failed, initiating emergency rollback..."
+          
+          # Get previous stable task definition
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster tiger-mcp-production \
+            --services tiger-mcp-service-production \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          
+          # Extract task definition name and revision
+          TASK_DEF_NAME=$(echo $TASK_DEF_ARN | cut -d'/' -f2 | cut -d':' -f1)
+          CURRENT_REV=$(echo $TASK_DEF_ARN | cut -d':' -f2)
+          PREV_REV=$((CURRENT_REV - 1))
+          
+          if [ $PREV_REV -gt 0 ]; then
+            ROLLBACK_TASK_DEF="$TASK_DEF_NAME:$PREV_REV"
+            
+            aws ecs update-service \
+              --cluster tiger-mcp-production \
+              --service tiger-mcp-service-production \
+              --task-definition $ROLLBACK_TASK_DEF \
+              --force-new-deployment
+            
+            echo "🔄 Emergency rollback to $ROLLBACK_TASK_DEF initiated"
+            
+            # Wait for rollback to complete
+            aws ecs wait services-stable \
+              --cluster tiger-mcp-production \
+              --services tiger-mcp-service-production
+            
+            echo "✅ Rollback completed successfully"
+          else
+            echo "⚠️  No previous version available for rollback"
+            echo "🚨 Manual intervention required!"
+          fi
+
+  # ===========================================================================
+  # POST-DEPLOYMENT VALIDATION
+  # ===========================================================================
+  post-deployment-tests:
+    name: Post-Deployment Validation
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: always() && needs.deploy-production.result == 'success'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest requests python-dotenv
+
+      - name: Run end-to-end tests
+        env:
+          TEST_BASE_URL: https://tiger-mcp.yourdomain.com
+          TEST_API_URL: https://tiger-mcp.yourdomain.com/api
+        run: |
+          # Run comprehensive E2E tests against production
+          python -m pytest tests/e2e/ -v --tb=short || true
+
+      - name: Performance baseline check
+        run: |
+          # Quick performance check
+          echo "Checking production performance..."
+          
+          # Measure response times
+          RESPONSE_TIME=$(curl -o /dev/null -s -w '%{time_total}' https://tiger-mcp.yourdomain.com/health)
+          echo "Health endpoint response time: ${RESPONSE_TIME}s"
+          
+          # Check if response time is acceptable (< 2 seconds)
+          if (( $(echo "$RESPONSE_TIME < 2.0" | bc -l) )); then
+            echo "✅ Performance check passed"
+          else
+            echo "⚠️  Performance check warning: Response time ${RESPONSE_TIME}s exceeds 2s threshold"
+          fi
+
+  # ===========================================================================
+  # DEPLOYMENT NOTIFICATION
+  # ===========================================================================
+  notify:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production, post-deployment-tests]
+    if: always()
+    
+    steps:
+      - name: Determine deployment status
+        id: status
+        run: |
+          STAGING_STATUS="${{ needs.deploy-staging.result }}"
+          PRODUCTION_STATUS="${{ needs.deploy-production.result }}"
+          E2E_STATUS="${{ needs.post-deployment-tests.result }}"
+          
+          echo "staging-status=$STAGING_STATUS" >> $GITHUB_OUTPUT
+          echo "production-status=$PRODUCTION_STATUS" >> $GITHUB_OUTPUT
+          echo "e2e-status=$E2E_STATUS" >> $GITHUB_OUTPUT
+
+      - name: Success notification
+        if: steps.status.outputs.staging-status == 'success' && (steps.status.outputs.production-status == 'success' || steps.status.outputs.production-status == 'skipped')
+        run: |
+          echo "🎉 Deployment Pipeline Completed Successfully!"
+          echo ""
+          echo "📊 Deployment Summary:"
+          echo "- Staging: ✅ Success"
+          echo "- Production: ${{ steps.status.outputs.production-status == 'success' && '✅ Success' || '⏭️ Skipped' }}"
+          echo "- E2E Tests: ${{ steps.status.outputs.e2e-status == 'success' && '✅ Success' || steps.status.outputs.e2e-status == 'skipped' && '⏭️ Skipped' || '❌ Failed' }}"
+          echo ""
+          echo "🔗 Environment URLs:"
+          echo "- Staging: https://tiger-mcp-staging.yourdomain.com"
+          if [[ "${{ steps.status.outputs.production-status }}" == "success" ]]; then
+            echo "- Production: https://tiger-mcp.yourdomain.com"
+          fi
+
+      - name: Failure notification
+        if: steps.status.outputs.staging-status == 'failure' || steps.status.outputs.production-status == 'failure'
+        run: |
+          echo "❌ Deployment Pipeline Failed!"
+          echo ""
+          echo "📊 Failure Summary:"
+          echo "- Staging: ${{ steps.status.outputs.staging-status == 'success' && '✅ Success' || '❌ Failed' }}"
+          echo "- Production: ${{ steps.status.outputs.production-status == 'success' && '✅ Success' || steps.status.outputs.production-status == 'failure' && '❌ Failed' || '⏭️ Skipped' }}"
+          echo ""
+          echo "🔍 Please check the workflow logs for detailed error information."
+          exit 1

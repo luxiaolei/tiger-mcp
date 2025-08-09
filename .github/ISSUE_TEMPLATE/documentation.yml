@@ -1,0 +1,273 @@
+name: 📚 Documentation
+description: Report missing, incorrect, or unclear documentation
+title: "[DOCS] "
+labels: ["documentation", "needs-triage"]
+assignees: ["technical-writers"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation! Clear and accurate documentation is essential for the Tiger MCP System.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight Checklist
+      description: Please confirm you have completed the following
+      options:
+        - label: I have searched existing documentation issues
+          required: true
+        - label: I have checked if this documentation exists elsewhere
+          required: true
+        - label: I have reviewed the current documentation thoroughly
+          required: true
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation issue is this?
+      options:
+        - Missing Documentation
+        - Incorrect Documentation
+        - Unclear/Confusing Documentation
+        - Outdated Documentation
+        - Documentation Improvement
+        - New Documentation Request
+        - Translation/Localization
+    validations:
+      required: true
+
+  - type: dropdown
+    id: doc_category
+    attributes:
+      label: Documentation Category
+      description: Which category of documentation is affected?
+      options:
+        - API Documentation
+        - User Guide/Tutorial
+        - Installation Instructions
+        - Configuration Guide
+        - Developer Documentation
+        - Architecture Documentation
+        - Troubleshooting Guide
+        - FAQ
+        - Code Comments/Docstrings
+        - README Files
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component does this documentation relate to?
+      options:
+        - MCP Server
+        - Dashboard API
+        - Database
+        - Shared Libraries
+        - Docker/Infrastructure
+        - CI/CD
+        - Tiger API Integration
+        - General Project
+        - Multiple Components
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Where is the documentation located (or where should it be)?
+      placeholder: "e.g., README.md, docs/api/mcp-server.md, inline code comments, etc."
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue_description
+    attributes:
+      label: Issue Description
+      description: Describe the documentation issue in detail
+      placeholder: |
+        Clearly describe:
+        - What documentation is missing, incorrect, or unclear
+        - What you expected to find vs. what you found
+        - How this affects your understanding or ability to use the system
+        - Specific sections or parts that are problematic
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_content
+    attributes:
+      label: Current Content (if applicable)
+      description: If this is about existing documentation, paste the current content
+      render: markdown
+      placeholder: |
+        Paste the current documentation content that needs improvement.
+        This helps us understand exactly what needs to be changed.
+
+  - type: textarea
+    id: suggested_content
+    attributes:
+      label: Suggested Content/Improvement
+      description: Provide suggestions for how the documentation should be improved
+      render: markdown
+      placeholder: |
+        Provide your suggestions:
+        - What content should be added or changed
+        - How it could be explained more clearly
+        - Additional examples or context needed
+        - Better organization or structure
+
+  - type: textarea
+    id: user_story
+    attributes:
+      label: User Story
+      description: Describe who would use this documentation and why
+      placeholder: |
+        As a [type of user], I want [documentation goal] so that [benefit].
+        
+        Examples:
+        - As a new developer, I want clear setup instructions so that I can get the project running quickly
+        - As an API user, I want complete endpoint documentation so that I can integrate successfully
+        - As a system administrator, I want troubleshooting guides so that I can resolve issues quickly
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Target Audience
+      description: Who is the primary audience for this documentation?
+      options:
+        - End Users
+        - Developers/Integrators
+        - System Administrators
+        - DevOps Engineers
+        - New Contributors
+        - Experienced Contributors
+        - All Users
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this documentation improvement?
+      options:
+        - High (Critical for users, blocking adoption)
+        - Medium (Important for user experience)
+        - Low (Nice to have, minor improvement)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: doc_standards
+    attributes:
+      label: Documentation Standards
+      description: What documentation standards should this follow?
+      options:
+        - label: Follow project style guide
+        - label: Include code examples
+        - label: Include screenshots/diagrams where helpful
+        - label: Provide troubleshooting information
+        - label: Include links to related documentation
+        - label: Consider accessibility guidelines
+        - label: Include version information
+
+  - type: textarea
+    id: examples_needed
+    attributes:
+      label: Examples Needed
+      description: What examples would make this documentation more helpful?
+      placeholder: |
+        Describe examples that would improve the documentation:
+        - Code snippets
+        - Configuration examples
+        - Step-by-step procedures
+        - Common use cases
+        - Error handling scenarios
+        - Integration examples
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and Background
+      description: Provide context about when and why you needed this documentation
+      placeholder: |
+        Help us understand:
+        - What task were you trying to accomplish?
+        - What was your experience level with the system?
+        - What other documentation did you consult?
+        - How long did it take you to find/understand the information?
+        - What would have made it easier?
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: How does this documentation issue impact users?
+      placeholder: |
+        Describe the impact:
+        - Does it block users from completing tasks?
+        - Does it cause confusion or errors?
+        - Does it slow down onboarding?
+        - Does it require additional support?
+        - How many users might be affected?
+
+  - type: checkboxes
+    id: related_docs
+    attributes:
+      label: Related Documentation
+      description: Are there related documentation areas that should be updated?
+      options:
+        - label: API documentation needs updating
+        - label: Configuration examples need updating
+        - label: Tutorial/guide needs updating
+        - label: FAQ needs updating
+        - label: Troubleshooting guide needs updating
+        - label: Architecture documentation needs updating
+        - label: Code comments need updating
+        - label: Multiple documentation areas are related
+
+  - type: textarea
+    id: research
+    attributes:
+      label: Research Done
+      description: What research have you done to understand this topic?
+      placeholder: |
+        Describe your research:
+        - Source code you've reviewed
+        - External documentation consulted
+        - Community discussions or forums
+        - Similar projects you've referenced
+        - Team members you've consulted
+
+  - type: dropdown
+    id: maintenance
+    attributes:
+      label: Maintenance Considerations
+      description: How often might this documentation need updates?
+      options:
+        - Rarely (Stable information)
+        - Occasionally (Minor updates expected)
+        - Regularly (Frequent updates needed)
+        - Continuously (Rapidly changing feature)
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any other information that would be helpful
+      placeholder: |
+        Include any additional context:
+        - Screenshots of confusing areas
+        - Links to related issues or discussions
+        - User feedback you've received
+        - Best practices from other projects
+        - Accessibility considerations
+        - Internationalization needs

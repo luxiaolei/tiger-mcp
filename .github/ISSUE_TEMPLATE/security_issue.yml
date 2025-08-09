@@ -1,0 +1,226 @@
+name: 🔒 Security Issue
+description: Report a security vulnerability or concern in the Tiger MCP System
+title: "[SECURITY] "
+labels: ["security", "needs-triage", "priority-high"]
+assignees: ["security-team"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚠️ Security Vulnerability Report
+        
+        **IMPORTANT**: If this is a critical security vulnerability that could be exploited, please consider reporting it privately first by emailing security@tiger-mcp.com instead of creating a public issue.
+        
+        For less severe security concerns or security feature requests, please continue with this form.
+
+  - type: checkboxes
+    id: severity_check
+    attributes:
+      label: Severity Assessment
+      description: Please assess the severity of this security issue
+      options:
+        - label: This is a critical vulnerability that could lead to immediate compromise
+        - label: This is a high-severity issue that needs urgent attention
+        - label: This is a moderate security concern
+        - label: This is a low-severity security improvement suggestion
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Issue Type
+      description: What type of security issue is this?
+      options:
+        - Vulnerability (exploitable security flaw)
+        - Security Enhancement Request
+        - Security Configuration Issue
+        - Compliance Concern
+        - Security Best Practice Violation
+        - Dependency Vulnerability
+        - Other Security Concern
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      description: Which component is affected by this security issue?
+      options:
+        - MCP Server
+        - Dashboard API
+        - Database
+        - Shared Libraries
+        - Docker Configuration
+        - CI/CD Pipeline
+        - Authentication System
+        - Tiger API Integration
+        - Infrastructure/Networking
+        - Multiple Components
+        - Unknown/Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Security Issue Description
+      description: Provide a detailed description of the security issue
+      placeholder: |
+        Describe the security issue, including:
+        - What the vulnerability or concern is
+        - How it could be exploited or what risks it presents
+        - What assets or data could be affected
+        - Any conditions required for exploitation
+    validations:
+      required: true
+
+  - type: dropdown
+    id: attack_vector
+    attributes:
+      label: Attack Vector
+      description: How could this vulnerability be exploited?
+      options:
+        - Network (Remote exploitation)
+        - Local (Requires local access)
+        - Physical (Requires physical access)
+        - Social Engineering
+        - Insider Threat
+        - Supply Chain
+        - Not Applicable (Not a vulnerability)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: impact_areas
+    attributes:
+      label: Potential Impact
+      description: What could be affected if this security issue is exploited?
+      options:
+        - label: Data confidentiality (unauthorized data access)
+        - label: Data integrity (data modification/corruption)
+        - label: System availability (service disruption/DoS)
+        - label: Authentication bypass
+        - label: Authorization bypass (privilege escalation)
+        - label: Code execution (remote or local)
+        - label: Information disclosure
+        - label: Compliance violations
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce (if applicable)
+      description: If this is a vulnerability, provide steps to reproduce it
+      placeholder: |
+        For security vulnerabilities, provide:
+        1. Detailed reproduction steps
+        2. Required conditions or setup
+        3. Expected vs actual behavior
+        4. Any special tools or knowledge needed
+        
+        **Note**: Avoid providing complete exploit code in public issues
+      render: text
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Provide evidence of the security issue (sanitized)
+      placeholder: |
+        Include relevant evidence such as:
+        - Error messages (sanitized of sensitive data)
+        - Screenshots (with sensitive data redacted)
+        - Log entries (sanitized)
+        - Network traffic captures (sanitized)
+        - Static analysis results
+        
+        **IMPORTANT**: Remove or redact any sensitive information
+      render: text
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Provide details about the environment where this was discovered
+      placeholder: |
+        - Version/commit hash
+        - Deployment environment (dev/staging/prod)
+        - Operating system
+        - Network configuration
+        - Any relevant middleware or dependencies
+      render: text
+
+  - type: dropdown
+    id: cvss_score
+    attributes:
+      label: Estimated CVSS Score Range
+      description: If you're familiar with CVSS scoring, what range would you estimate?
+      options:
+        - "Critical (9.0-10.0)"
+        - "High (7.0-8.9)"
+        - "Medium (4.0-6.9)"
+        - "Low (0.1-3.9)"
+        - "Not Applicable/Unsure"
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Suggested Mitigation
+      description: Do you have suggestions for how to fix or mitigate this issue?
+      placeholder: |
+        Provide suggestions for:
+        - Immediate workarounds
+        - Short-term fixes
+        - Long-term solutions
+        - Configuration changes
+        - Security controls that could be implemented
+
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Responsible Disclosure
+      description: Please confirm your commitment to responsible disclosure
+      options:
+        - label: I will not publicly disclose details of this vulnerability until it has been addressed
+          required: true
+        - label: I will work with the security team to validate and resolve this issue
+          required: true
+        - label: I understand this report may be shared with relevant team members under appropriate confidentiality agreements
+
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Suggested Timeline
+      description: What timeline do you think is appropriate for addressing this issue?
+      placeholder: |
+        Based on the severity, what timeline would you suggest for:
+        - Initial response
+        - Investigation completion
+        - Fix development
+        - Deployment to production
+        - Public disclosure (if applicable)
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Provide any relevant references or research
+      placeholder: |
+        Include links to:
+        - CVE entries
+        - Security advisories
+        - Research papers
+        - Similar vulnerabilities
+        - Vendor security bulletins
+        - OWASP guidelines
+
+  - type: textarea
+    id: additional_info
+    attributes:
+      label: Additional Information
+      description: Any additional context or information
+      placeholder: |
+        Additional details such as:
+        - How you discovered this issue
+        - Related security concerns
+        - Broader implications
+        - Recommendations for security improvements

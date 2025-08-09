@@ -1,0 +1,290 @@
+version: '3.8'
+
+services:
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: tiger-mcp-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./docker/ssl:/etc/ssl/certs:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - dashboard-api
+      - mcp-server
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - tiger-mcp-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: tiger-mcp-postgres-prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    ports:
+      - "127.0.0.1:5432:5432"  # Only bind to localhost in production
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - tiger-mcp-network
+    restart: always
+    secrets:
+      - postgres_password
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # Redis Cache and Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: tiger-mcp-redis-prod
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6379:6379"  # Only bind to localhost in production
+    volumes:
+      - redis_data_prod:/data
+      - ./docker/redis/redis-prod.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - tiger-mcp-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Database Migration Service
+  db-migrate:
+    build:
+      context: .
+      dockerfile: ./docker/database/Dockerfile
+      target: production
+    container_name: tiger-mcp-db-migrate-prod
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENVIRONMENT=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tiger-mcp-network
+    command: ["python", "manage_db.py", "upgrade"]
+    secrets:
+      - postgres_password
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  # MCP Server
+  mcp-server:
+    build:
+      context: .
+      dockerfile: ./docker/mcp-server/Dockerfile
+      target: production
+    container_name: tiger-mcp-server-prod
+    environment:
+      # Tiger API Configuration
+      - TIGER_CLIENT_ID=${TIGER_CLIENT_ID}
+      - TIGER_PRIVATE_KEY_FILE=/run/secrets/tiger_private_key
+      - TIGER_ACCOUNT=${TIGER_ACCOUNT}
+      - TIGER_SANDBOX=${TIGER_SANDBOX:-false}
+      
+      # Database Configuration
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      
+      # Cache Configuration  
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      
+      # Application Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DEBUG=false
+      - ENVIRONMENT=production
+      
+      # Security
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+    volumes:
+      - ./logs:/app/logs
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    networks:
+      - tiger-mcp-network
+    restart: always
+    secrets:
+      - postgres_password
+      - tiger_private_key
+      - secret_key
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 3
+
+  # Dashboard API
+  dashboard-api:
+    build:
+      context: .
+      dockerfile: ./docker/dashboard-api/Dockerfile
+      target: production
+    container_name: tiger-mcp-api-prod
+    environment:
+      # Database Configuration
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      
+      # Cache Configuration
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      
+      # Security
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      
+      # CORS Configuration
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      
+      # Application Configuration
+      - DEBUG=false
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENVIRONMENT=production
+    volumes:
+      - ./logs:/app/logs
+    expose:
+      - "8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    networks:
+      - tiger-mcp-network
+    restart: always
+    secrets:
+      - postgres_password
+      - secret_key
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 3
+
+volumes:
+  postgres_data_prod:
+    name: tiger-mcp-postgres-data-prod
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/tiger-mcp/data/postgres
+  redis_data_prod:
+    name: tiger-mcp-redis-data-prod
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/tiger-mcp/data/redis
+
+networks:
+  tiger-mcp-network:
+    name: tiger-mcp-network-prod
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  tiger_private_key:
+    file: ./secrets/tiger_private_key.pem
+  secret_key:
+    file: ./secrets/secret_key.txt

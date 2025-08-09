@@ -1,0 +1,506 @@
+name: Security Scanning
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_CACHE_DIR: /tmp/.uv-cache
+
+jobs:
+  # ===========================================================================
+  # DEPENDENCY VULNERABILITY SCANNING
+  # ===========================================================================
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev --all-extras
+          uv pip install --system safety pip-audit
+
+      - name: Run Safety check
+        run: |
+          uv pip freeze | safety check --stdin --json --output safety-report.json || true
+          uv pip freeze | safety check --stdin --full-report
+
+      - name: Run pip-audit
+        run: |
+          pip-audit --format=json --output=pip-audit-report.json || true
+          pip-audit --format=cyclonedx-json --output=pip-audit-sbom.json || true
+          pip-audit
+
+      - name: Upload vulnerability reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-vulnerability-reports
+          path: |
+            safety-report.json
+            pip-audit-report.json
+            pip-audit-sbom.json
+          retention-days: 90
+          
+
+  # ===========================================================================
+  # STATIC APPLICATION SECURITY TESTING (SAST)
+  # ===========================================================================
+  sast-scan:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install security tools
+        run: |
+          uv pip install --system bandit[toml] semgrep
+
+      - name: Run Bandit security linter
+        run: |
+          bandit -r packages/ mcp-server/ -f json -o bandit-report.json || true
+          bandit -r packages/ mcp-server/ -f txt -o bandit-report.txt || true
+          bandit -r packages/ mcp-server/ -ll
+
+      - name: Run Semgrep
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        run: |
+          semgrep --config=auto --json --output=semgrep-report.json . || true
+          semgrep --config=auto .
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+
+      - name: Upload SAST reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sast-reports
+          path: |
+            bandit-report.json
+            bandit-report.txt
+            semgrep-report.json
+          retention-days: 90
+
+  # ===========================================================================
+  # CONTAINER SECURITY SCANNING
+  # ===========================================================================
+  container-security:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    needs: dependency-scan
+    strategy:
+      matrix:
+        service: [mcp-server, dashboard-api, database]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/${{ matrix.service }}/Dockerfile
+          tags: tiger-mcp-${{ matrix.service }}:security-scan
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'tiger-mcp-${{ matrix.service }}:security-scan'
+          format: 'sarif'
+          output: 'trivy-${{ matrix.service }}.sarif'
+
+      - name: Run Trivy for JSON report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'tiger-mcp-${{ matrix.service }}:security-scan'
+          format: 'json'
+          output: 'trivy-${{ matrix.service }}.json'
+
+      - name: Run Trivy for table output
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'tiger-mcp-${{ matrix.service }}:security-scan'
+          format: 'table'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-${{ matrix.service }}.sarif'
+          category: 'container-${{ matrix.service }}'
+
+      - name: Upload container scan reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-scan-${{ matrix.service }}
+          path: |
+            trivy-${{ matrix.service }}.sarif
+            trivy-${{ matrix.service }}.json
+          retention-days: 90
+
+  # ===========================================================================
+  # SECRET DETECTION
+  # ===========================================================================
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified --json --output=trufflehog-report.json
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml
+
+      - name: Upload secret scan reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: secret-scan-reports
+          path: |
+            trufflehog-report.json
+          retention-days: 90
+
+  # ===========================================================================
+  # INFRASTRUCTURE AS CODE SECURITY
+  # ===========================================================================
+  iac-scan:
+    name: Infrastructure as Code Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        id: checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: dockerfile,docker_compose,kubernetes,secrets
+          output_format: sarif
+          output_file_path: checkov-report.sarif
+          quiet: true
+          soft_fail: true
+
+      - name: Upload Checkov scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-report.sarif
+          category: 'iac-security'
+
+      - name: Run Hadolint for Dockerfile linting
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/mcp-server/Dockerfile
+          format: sarif
+          output-file: hadolint-mcp-server.sarif
+
+      - name: Run Hadolint for Dashboard API Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/dashboard-api/Dockerfile  
+          format: sarif
+          output-file: hadolint-dashboard-api.sarif
+
+      - name: Run Hadolint for Database Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/database/Dockerfile
+          format: sarif
+          output-file: hadolint-database.sarif
+
+      - name: Upload Hadolint results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: |
+            hadolint-mcp-server.sarif
+            hadolint-dashboard-api.sarif
+            hadolint-database.sarif
+          category: 'dockerfile-security'
+
+      - name: Upload IaC scan reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iac-scan-reports
+          path: |
+            checkov-report.sarif
+            hadolint-*.sarif
+          retention-days: 90
+
+  # ===========================================================================
+  # SECURITY SCORECARD
+  # ===========================================================================
+  scorecard:
+    name: OSSF Scorecard
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2.3.1
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload SARIF results to dependency graph
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+  # ===========================================================================
+  # LICENSE COMPLIANCE
+  # ===========================================================================
+  license-scan:
+    name: License Compliance Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev --all-extras
+          uv pip install --system pip-licenses
+
+      - name: Generate license report
+        run: |
+          pip-licenses --format=json --output-file=licenses-report.json --with-urls --with-description
+          pip-licenses --format=csv --output-file=licenses-report.csv --with-urls
+          pip-licenses
+
+      - name: Upload license reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-reports
+          path: |
+            licenses-report.json
+            licenses-report.csv
+          retention-days: 90
+
+  # ===========================================================================
+  # SECURITY SUMMARY REPORT
+  # ===========================================================================
+  security-summary:
+    name: Security Summary Report
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, sast-scan, container-security, secret-scan, iac-scan, license-scan]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate security summary
+        run: |
+          echo "# Security Scan Summary Report" > security-summary.md
+          echo "" >> security-summary.md
+          echo "**Date:** $(date -u)" >> security-summary.md
+          echo "**Workflow:** ${{ github.workflow }}" >> security-summary.md  
+          echo "**Run ID:** ${{ github.run_id }}" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          echo "## Scan Results" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "| Security Check | Status | Details |" >> security-summary.md
+          echo "|---------------|--------|---------|" >> security-summary.md
+          echo "| Dependency Scan | ${{ needs.dependency-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | Vulnerability scanning of dependencies |" >> security-summary.md
+          echo "| SAST Scan | ${{ needs.sast-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | Static application security testing |" >> security-summary.md
+          echo "| Container Security | ${{ needs.container-security.result == 'success' && '✅ Passed' || '❌ Failed' }} | Container vulnerability scanning |" >> security-summary.md
+          echo "| Secret Detection | ${{ needs.secret-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | Secret and credential detection |" >> security-summary.md
+          echo "| IaC Security | ${{ needs.iac-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | Infrastructure as code security |" >> security-summary.md
+          echo "| License Compliance | ${{ needs.license-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | License compliance check |" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          # Add recommendations
+          echo "## Security Recommendations" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "1. **Regular Updates**: Keep all dependencies up to date" >> security-summary.md
+          echo "2. **Monitoring**: Monitor security advisories for used packages" >> security-summary.md
+          echo "3. **Access Control**: Implement least privilege access principles" >> security-summary.md
+          echo "4. **Secrets Management**: Use proper secrets management solutions" >> security-summary.md
+          echo "5. **Container Security**: Regularly update base images and scan containers" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          echo "---" >> security-summary.md
+          echo "*Report generated by GitHub Actions Security Workflow*" >> security-summary.md
+
+      - name: Upload security summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-summary-report
+          path: security-summary.md
+          retention-days: 90
+
+      - name: Comment PR with security summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔒 Security Scan Results\n\n${summary}`
+            });
+
+  # ===========================================================================
+  # SECURITY ALERTS AND NOTIFICATIONS
+  # ===========================================================================
+  notify-security:
+    name: Security Alert Notifications
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, sast-scan, container-security, secret-scan]
+    if: |
+      always() && (
+        needs.dependency-scan.result == 'failure' ||
+        needs.sast-scan.result == 'failure' ||
+        needs.container-security.result == 'failure' ||
+        needs.secret-scan.result == 'failure'
+      )
+    steps:
+      - name: Send security alert
+        run: |
+          echo "🚨 SECURITY ALERT: One or more security scans failed!"
+          echo ""
+          echo "Scan Results:"
+          echo "- Dependency Scan: ${{ needs.dependency-scan.result }}"
+          echo "- SAST Scan: ${{ needs.sast-scan.result }}"
+          echo "- Container Security: ${{ needs.container-security.result }}"
+          echo "- Secret Detection: ${{ needs.secret-scan.result }}"
+          echo ""
+          echo "Please review the security scan results and take appropriate action."
+          echo "Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Create security issue
+        if: github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🚨 Security Scan Failures - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## Security Scan Alert
+            
+            One or more scheduled security scans have failed. Please review and address the following:
+            
+            ### Scan Results
+            - **Dependency Scan**: ${{ needs.dependency-scan.result }}
+            - **SAST Scan**: ${{ needs.sast-scan.result }}  
+            - **Container Security**: ${{ needs.container-security.result }}
+            - **Secret Detection**: ${{ needs.secret-scan.result }}
+            
+            ### Actions Required
+            1. Review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for detailed results
+            2. Address any critical or high-severity vulnerabilities
+            3. Update dependencies if needed
+            4. Review and rotate any exposed secrets
+            5. Close this issue once all security issues are resolved
+            
+            ### Resources
+            - [Security Policy](./SECURITY.md)
+            - [Contributing Guidelines](./CONTRIBUTING.md)
+            
+            **Workflow Run**: ${{ github.run_id }}
+            **Triggered**: ${new Date().toISOString()}
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['security', 'high-priority', 'automated']
+            });

@@ -1,0 +1,11 @@
+{
+  "name": "tiger-mcp-test",
+  "command": "uv run --package mcp-server python /Volumes/extdisk/MyRepos/cctrading-ws/tiger-mcp/packages/mcp-server/src/mcp_server/server.py",
+  "env": {
+    "TIGER_CLIENT_ID": "test_client_123",
+    "TIGER_PRIVATE_KEY": "test_private_key",
+    "TIGER_ACCOUNT": "88888888",
+    "TIGER_SANDBOX": "true",
+    "TIGER_LICENSE": "TBHK"
+  }
+}

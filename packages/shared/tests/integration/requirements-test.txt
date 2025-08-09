@@ -1,0 +1,84 @@
+# Core testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-xdist>=3.3.0
+pytest-html>=3.2.0
+pytest-benchmark>=4.0.0
+
+# Database testing
+asyncpg>=0.28.0
+sqlalchemy[asyncio]>=2.0.0
+alembic>=1.11.0
+psycopg2-binary>=2.9.0
+
+# Redis testing
+redis>=4.5.0
+fakeredis>=2.17.0
+
+# HTTP and API testing
+httpx>=0.24.0
+fastapi>=0.100.0
+uvicorn>=0.22.0
+requests>=2.31.0
+
+# Docker and container testing
+docker>=6.1.0
+testcontainers>=3.7.0
+
+# Process and concurrency testing
+psutil>=5.9.0
+multiprocess>=0.70.0
+
+# Mock and test utilities
+responses>=0.23.0
+factory-boy>=3.3.0
+freezegun>=1.2.0
+
+# Performance and load testing
+locust>=2.15.0
+memory-profiler>=0.61.0
+
+# Data validation and serialization
+pydantic>=2.0.0
+marshmallow>=3.20.0
+
+# Logging and monitoring
+loguru>=0.7.0
+structlog>=23.1.0
+
+# Security testing
+cryptography>=41.0.0
+python-jose>=3.3.0
+
+# Configuration and environment
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# Time and date utilities
+python-dateutil>=2.8.0
+pytz>=2023.3
+
+# Development utilities
+black>=23.7.0
+isort>=5.12.0
+mypy>=1.5.0
+flake8>=6.0.0
+
+# Integration testing specific
+pytest-docker>=2.0.0
+pytest-postgresql>=5.0.0
+pytest-redis>=3.0.0
+
+# Performance profiling
+py-spy>=0.3.0
+line_profiler>=4.0.0
+
+# Test data generation
+faker>=19.3.0
+mimesis>=10.1.0
+
+# Report generation
+junitparser>=3.1.0
+coverage>=7.2.0

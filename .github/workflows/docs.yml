@@ -1,0 +1,583 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - '**.md'
+      - 'packages/**/src/**'
+      - 'mcp-server/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - '**.md'
+      - 'packages/**/src/**'
+      - 'mcp-server/**'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_CACHE_DIR: /tmp/.uv-cache
+
+jobs:
+  # ===========================================================================
+  # DOCUMENTATION QUALITY CHECKS
+  # ===========================================================================
+  doc-quality:
+    name: Documentation Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install documentation tools
+        run: |
+          npm install -g markdownlint-cli alex write-good
+
+      - name: Lint Markdown files
+        run: |
+          # Create markdownlint config if it doesn't exist
+          if [ ! -f .markdownlint.json ]; then
+            cat > .markdownlint.json << 'EOF'
+            {
+              "MD013": { "line_length": 120 },
+              "MD041": false,
+              "MD033": false,
+              "MD024": { "allow_different_nesting": true }
+            }
+            EOF
+          fi
+          
+          markdownlint docs/ README.md || true
+
+      - name: Check inclusive language
+        run: |
+          alex docs/ README.md --quiet || true
+
+      - name: Check writing style
+        run: |
+          write-good docs/**/*.md README.md || true
+
+      - name: Validate documentation structure
+        run: |
+          echo "Checking documentation structure..."
+          
+          # Check required documentation files exist
+          required_docs=("README.md" "docs/API_REFERENCE.md" "docs/QUICK_START_GUIDE.md")
+          missing_docs=()
+          
+          for doc in "${required_docs[@]}"; do
+            if [ ! -f "$doc" ]; then
+              missing_docs+=("$doc")
+            fi
+          done
+          
+          if [ ${#missing_docs[@]} -ne 0 ]; then
+            echo "Missing required documentation files:"
+            printf '  - %s\n' "${missing_docs[@]}"
+          else
+            echo "All required documentation files are present."
+          fi
+
+      - name: Check for broken internal links
+        run: |
+          echo "Checking for broken internal links..."
+          
+          # Simple check for broken internal links in markdown files
+          find . -name "*.md" -exec grep -l "\[.*\](" {} \; | while read -r file; do
+            echo "Checking links in $file..."
+            grep -oP '\[.*?\]\(\K[^)]*(?=\))' "$file" | while read -r link; do
+              if [[ "$link" =~ ^[./] ]]; then
+                # Internal link - check if file exists
+                if [[ "$link" =~ ^# ]]; then
+                  # Fragment link - skip for now
+                  continue
+                fi
+                
+                # Resolve relative path
+                dir=$(dirname "$file")
+                full_path="$dir/$link"
+                
+                if [ ! -f "$full_path" ] && [ ! -d "$full_path" ]; then
+                  echo "Broken link in $file: $link"
+                fi
+              fi
+            done
+          done
+
+  # ===========================================================================
+  # API DOCUMENTATION GENERATION  
+  # ===========================================================================
+  api-docs:
+    name: Generate API Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev --all-extras
+          uv pip install --system sphinx sphinx-rtd-theme sphinx-autodoc-typehints myst-parser
+
+      - name: Generate API documentation with Sphinx
+        run: |
+          mkdir -p docs/api
+          
+          # Create Sphinx configuration if it doesn't exist
+          if [ ! -f docs/conf.py ]; then
+            cat > docs/conf.py << 'EOF'
+          import os
+          import sys
+          sys.path.insert(0, os.path.abspath('../packages'))
+          sys.path.insert(0, os.path.abspath('../mcp-server'))
+
+          project = 'Tiger MCP System'
+          copyright = '2024, Tiger MCP Team'
+          author = 'Tiger MCP Team'
+          
+          extensions = [
+              'sphinx.ext.autodoc',
+              'sphinx.ext.viewcode',
+              'sphinx.ext.napoleon',
+              'sphinx_autodoc_typehints',
+              'myst_parser'
+          ]
+          
+          templates_path = ['_templates']
+          exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+          
+          html_theme = 'sphinx_rtd_theme'
+          html_static_path = ['_static']
+          
+          autodoc_default_options = {
+              'members': True,
+              'undoc-members': True,
+              'show-inheritance': True,
+          }
+          EOF
+          fi
+          
+          # Generate API docs
+          cd docs
+          sphinx-apidoc -o api ../packages/mcp-server/src ../packages/dashboard-api/src ../packages/shared/src --force --separate
+          sphinx-build -b html . _build/html
+          
+      - name: Generate OpenAPI documentation
+        run: |
+          # Generate OpenAPI spec for dashboard API if it exists
+          if [ -d "packages/dashboard-api" ]; then
+            echo "Generating OpenAPI documentation..."
+            
+            # Check if FastAPI app exists and generate spec
+            cd packages/dashboard-api
+            if [ -f "src/main.py" ] || [ -f "main.py" ]; then
+              uv run python -c "
+              try:
+                  from main import app
+                  import json
+                  spec = app.openapi()
+                  with open('../../docs/api/openapi.json', 'w') as f:
+                      json.dump(spec, f, indent=2)
+                  print('OpenAPI spec generated successfully')
+              except Exception as e:
+                  print(f'Could not generate OpenAPI spec: {e}')
+              " || true
+            fi
+            cd ../..
+          fi
+
+      - name: Upload API documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-documentation
+          path: |
+            docs/_build/html/
+            docs/api/
+          retention-days: 30
+
+  # ===========================================================================
+  # DOCUMENTATION DEPLOYMENT
+  # ===========================================================================
+  deploy-docs:
+    name: Deploy Documentation
+    runs-on: ubuntu-latest
+    needs: [doc-quality, api-docs]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download API documentation
+        uses: actions/download-artifact@v4
+        with:
+          name: api-documentation
+          path: docs-build/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Prepare documentation site
+        run: |
+          mkdir -p site
+          
+          # Copy main documentation
+          cp -r docs/* site/ || true
+          
+          # Copy API documentation if available
+          if [ -d "docs-build/_build/html" ]; then
+            cp -r docs-build/_build/html/* site/api/ || true
+          fi
+          
+          # Create index page if it doesn't exist
+          if [ ! -f "site/index.html" ]; then
+            cat > site/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Tiger MCP System Documentation</title>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; }
+                  h1 { color: #333; }
+                  .nav { list-style: none; padding: 0; }
+                  .nav li { margin: 10px 0; }
+                  .nav a { color: #007acc; text-decoration: none; }
+                  .nav a:hover { text-decoration: underline; }
+              </style>
+          </head>
+          <body>
+              <h1>Tiger MCP System Documentation</h1>
+              <ul class="nav">
+                  <li><a href="README.html">README</a></li>
+                  <li><a href="QUICK_START_GUIDE.html">Quick Start Guide</a></li>
+                  <li><a href="API_REFERENCE.html">API Reference</a></li>
+                  <li><a href="api/">Auto-generated API Docs</a></li>
+                  <li><a href="DOCKER.html">Docker Guide</a></li>
+                  <li><a href="PRODUCTION_DEPLOYMENT.html">Production Deployment</a></li>
+                  <li><a href="TROUBLESHOOTING.html">Troubleshooting</a></li>
+              </ul>
+          </body>
+          </html>
+          EOF
+          fi
+          
+          # Convert markdown files to HTML for better GitHub Pages integration
+          if command -v pandoc &> /dev/null; then
+            find site -name "*.md" -type f | while read -r file; do
+              base_name=$(basename "$file" .md)
+              dir_name=$(dirname "$file")
+              pandoc "$file" -o "$dir_name/$base_name.html" --standalone --css=github.css || true
+            done
+          fi
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ===========================================================================
+  # CHANGELOG VALIDATION
+  # ===========================================================================
+  changelog:
+    name: Changelog Validation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changelog entry
+        run: |
+          echo "Checking for changelog entry..."
+          
+          # Get list of changed files
+          changed_files=$(git diff --name-only origin/main...HEAD)
+          
+          # Check if there are code changes that should require changelog
+          code_changes=false
+          while IFS= read -r file; do
+            if [[ "$file" =~ ^(packages|mcp-server)/ ]] && [[ "$file" =~ \.(py|js|ts)$ ]]; then
+              code_changes=true
+              break
+            fi
+          done <<< "$changed_files"
+          
+          # Check if CHANGELOG.md was updated
+          changelog_updated=false
+          if echo "$changed_files" | grep -q "CHANGELOG.md\|HISTORY.md\|NEWS.md"; then
+            changelog_updated=true
+          fi
+          
+          if [ "$code_changes" = true ] && [ "$changelog_updated" = false ]; then
+            echo "::warning::Code changes detected but no changelog entry found."
+            echo "Consider adding an entry to CHANGELOG.md for this PR."
+          else
+            echo "Changelog check passed."
+          fi
+
+  # ===========================================================================
+  # DOCUMENTATION METRICS
+  # ===========================================================================
+  doc-metrics:
+    name: Documentation Metrics
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Calculate documentation metrics
+        run: |
+          echo "# Documentation Metrics Report" > doc-metrics.md
+          echo "" >> doc-metrics.md
+          echo "**Generated:** $(date -u)" >> doc-metrics.md
+          echo "" >> doc-metrics.md
+          
+          # Count documentation files
+          md_files=$(find . -name "*.md" -not -path "./.git/*" | wc -l)
+          doc_files=$(find docs/ -name "*.md" 2>/dev/null | wc -l || echo "0")
+          
+          echo "## File Statistics" >> doc-metrics.md
+          echo "- Total Markdown files: $md_files" >> doc-metrics.md
+          echo "- Documentation files: $doc_files" >> doc-metrics.md
+          echo "" >> doc-metrics.md
+          
+          # Count lines of documentation
+          total_lines=$(find . -name "*.md" -not -path "./.git/*" -exec wc -l {} + | tail -1 | awk '{print $1}')
+          
+          echo "## Content Statistics" >> doc-metrics.md
+          echo "- Total lines of documentation: $total_lines" >> doc-metrics.md
+          echo "" >> doc-metrics.md
+          
+          # Check for required sections in README
+          echo "## README.md Analysis" >> doc-metrics.md
+          if [ -f "README.md" ]; then
+            sections=("Installation" "Usage" "Configuration" "Contributing" "License")
+            for section in "${sections[@]}"; do
+              if grep -qi "$section" README.md; then
+                echo "- ✅ Has $section section" >> doc-metrics.md
+              else
+                echo "- ❌ Missing $section section" >> doc-metrics.md
+              fi
+            done
+          else
+            echo "- ❌ README.md not found" >> doc-metrics.md
+          fi
+          echo "" >> doc-metrics.md
+          
+          # API documentation coverage
+          echo "## API Documentation Coverage" >> doc-metrics.md
+          python_files=$(find packages/ mcp-server/ -name "*.py" 2>/dev/null | wc -l || echo "0")
+          documented_files=$(find packages/ mcp-server/ -name "*.py" -exec grep -l '"""' {} \; 2>/dev/null | wc -l || echo "0")
+          
+          if [ "$python_files" -gt 0 ]; then
+            coverage=$(echo "scale=1; $documented_files * 100 / $python_files" | bc -l 2>/dev/null || echo "0")
+            echo "- Python files: $python_files" >> doc-metrics.md
+            echo "- Files with docstrings: $documented_files" >> doc-metrics.md
+            echo "- Documentation coverage: ${coverage}%" >> doc-metrics.md
+          else
+            echo "- No Python files found for analysis" >> doc-metrics.md
+          fi
+
+      - name: Upload documentation metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-metrics
+          path: doc-metrics.md
+          retention-days: 30
+
+      - name: Comment metrics on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('doc-metrics.md')) {
+              const metrics = fs.readFileSync('doc-metrics.md', 'utf8');
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 📊 Documentation Metrics\n\n${metrics}`
+              });
+            }
+
+  # ===========================================================================
+  # DOCUMENTATION COMPLETENESS CHECK
+  # ===========================================================================
+  completeness:
+    name: Documentation Completeness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev --all-extras
+
+      - name: Check code documentation completeness
+        run: |
+          echo "Checking code documentation completeness..."
+          
+          python3 << 'EOF'
+          import ast
+          import os
+          import sys
+          from pathlib import Path
+
+          def check_docstrings(file_path):
+              """Check if functions and classes have docstrings."""
+              with open(file_path, 'r', encoding='utf-8') as f:
+                  try:
+                      tree = ast.parse(f.read())
+                  except SyntaxError:
+                      return [], []
+              
+              missing_docs = []
+              total_items = []
+              
+              for node in ast.walk(tree):
+                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                      if node.name.startswith('_'):  # Skip private methods
+                          continue
+                          
+                      total_items.append(f"{node.name} ({type(node).__name__})")
+                      
+                      if not ast.get_docstring(node):
+                          missing_docs.append(f"{node.name} ({type(node).__name__})")
+              
+              return total_items, missing_docs
+
+          # Check all Python files
+          total_items = 0
+          total_missing = 0
+          files_checked = 0
+          
+          for root in ['packages', 'mcp-server']:
+              if not os.path.exists(root):
+                  continue
+                  
+              for py_file in Path(root).rglob('*.py'):
+                  if '__pycache__' in str(py_file) or 'test_' in py_file.name:
+                      continue
+                      
+                  items, missing = check_docstrings(py_file)
+                  total_items += len(items)
+                  total_missing += len(missing)
+                  files_checked += 1
+                  
+                  if missing:
+                      print(f"\n{py_file}:")
+                      for item in missing:
+                          print(f"  - Missing docstring: {item}")
+          
+          print(f"\n=== Documentation Coverage Summary ===")
+          print(f"Files checked: {files_checked}")
+          print(f"Total functions/classes: {total_items}")
+          print(f"Missing docstrings: {total_missing}")
+          
+          if total_items > 0:
+              coverage = ((total_items - total_missing) / total_items) * 100
+              print(f"Documentation coverage: {coverage:.1f}%")
+              
+              if coverage < 70:
+                  print("⚠️  Warning: Documentation coverage is below 70%")
+                  sys.exit(1)
+              else:
+                  print("✅ Documentation coverage is acceptable")
+          EOF
+
+  # ===========================================================================
+  # SUMMARY REPORT
+  # ===========================================================================
+  doc-summary:
+    name: Documentation Summary
+    runs-on: ubuntu-latest
+    needs: [doc-quality, api-docs, changelog, doc-metrics, completeness]
+    if: always()
+    steps:
+      - name: Generate documentation summary
+        run: |
+          echo "# Documentation Pipeline Summary" > doc-summary.md
+          echo "" >> doc-summary.md
+          echo "**Generated:** $(date -u)" >> doc-summary.md
+          echo "**Workflow:** ${{ github.workflow }}" >> doc-summary.md
+          echo "**Run ID:** ${{ github.run_id }}" >> doc-summary.md
+          echo "" >> doc-summary.md
+          
+          echo "## Job Results" >> doc-summary.md
+          echo "" >> doc-summary.md
+          echo "| Job | Status | Description |" >> doc-summary.md
+          echo "|-----|--------|-------------|" >> doc-summary.md
+          echo "| Documentation Quality | ${{ needs.doc-quality.result == 'success' && '✅ Passed' || '❌ Failed' }} | Markdown linting and quality checks |" >> doc-summary.md
+          echo "| API Documentation | ${{ needs.api-docs.result == 'success' && '✅ Passed' || '❌ Failed' }} | Generated API documentation |" >> doc-summary.md
+          echo "| Changelog Check | ${{ needs.changelog.result == 'success' && '✅ Passed' || needs.changelog.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | Changelog entry validation |" >> doc-summary.md
+          echo "| Documentation Metrics | ${{ needs.doc-metrics.result == 'success' && '✅ Passed' || '❌ Failed' }} | Documentation coverage metrics |" >> doc-summary.md
+          echo "| Completeness Check | ${{ needs.completeness.result == 'success' && '✅ Passed' || '❌ Failed' }} | Code documentation completeness |" >> doc-summary.md
+          echo "" >> doc-summary.md
+          
+          echo "## Recommendations" >> doc-summary.md
+          echo "" >> doc-summary.md
+          echo "1. **Keep documentation up to date** with code changes" >> doc-summary.md
+          echo "2. **Add docstrings** to all public functions and classes" >> doc-summary.md
+          echo "3. **Update changelog** for significant changes" >> doc-summary.md
+          echo "4. **Review and improve** documentation quality regularly" >> doc-summary.md
+          echo "5. **Ensure examples** are tested and working" >> doc-summary.md
+          
+      - name: Upload documentation summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-summary
+          path: doc-summary.md
+          retention-days: 30

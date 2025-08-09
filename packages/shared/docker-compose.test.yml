@@ -1,0 +1,352 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Test Database
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: tiger-mcp-postgres-test
+    environment:
+      POSTGRES_DB: tiger_mcp_test
+      POSTGRES_USER: tiger_test
+      POSTGRES_PASSWORD: tiger_test
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./tests/integration/test_data/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - tiger-mcp-test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tiger_test -d tiger_mcp_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Test Instance
+  redis-test:
+    image: redis:7-alpine
+    container_name: tiger-mcp-redis-test
+    command: redis-server --appendonly yes --port 6379
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis_test_data:/data
+    networks:
+      - tiger-mcp-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Test Database Setup Service
+  db-setup-test:
+    build:
+      context: ../../
+      dockerfile: ./packages/shared/tests/integration/Dockerfile.test-db-setup
+    container_name: tiger-mcp-db-setup-test
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://tiger_test:tiger_test@postgres-test:5432/tiger_mcp_test
+      - REDIS_URL=redis://redis-test:6379/15
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    networks:
+      - tiger-mcp-test-network
+    volumes:
+      - ./tests/integration/test_data:/app/test_data:ro
+    command: ["python", "-m", "tests.integration.setup_test_db"]
+
+  # Integration Test Runner
+  integration-tests:
+    build:
+      context: ../../
+      dockerfile: ./packages/shared/tests/integration/Dockerfile.integration-tests
+    container_name: tiger-mcp-integration-tests
+    environment:
+      # Database Configuration
+      - DATABASE_URL=postgresql+asyncpg://tiger_test:tiger_test@postgres-test:5432/tiger_mcp_test
+      - DATABASE_TEST_URL=postgresql+asyncpg://tiger_test:tiger_test@postgres-test:5432/tiger_mcp_test
+      
+      # Redis Configuration
+      - REDIS_URL=redis://redis-test:6379/15
+      - REDIS_TEST_URL=redis://redis-test:6379/15
+      
+      # Test Configuration
+      - ENVIRONMENT=test
+      - LOG_LEVEL=DEBUG
+      - PYTEST_VERBOSITY=2
+      
+      # Encryption and Security
+      - ENCRYPTION_MASTER_KEY=dGVzdF9lbmNyeXB0aW9uX2tleV8zMl9ieXRlc190ZXN0
+      - JWT_SECRET=test_jwt_secret_integration_tests_very_secure
+      
+      # Tiger API Mock Configuration  
+      - TIGER_MOCK_MODE=true
+      - TIGER_SANDBOX=true
+      
+      # Docker Configuration
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      
+      # Test Parallelization
+      - PYTEST_WORKERS=4
+      - MAX_CONCURRENT_TESTS=10
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      db-setup-test:
+        condition: service_completed_successfully
+    networks:
+      - tiger-mcp-test-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./tests/integration/test_results:/app/test_results
+      - ./tests/integration/test_data:/app/test_data:ro
+      - test_cache:/app/.pytest_cache
+    working_dir: /app/packages/shared
+    command: [
+      "python", "-m", "pytest",
+      "tests/integration/",
+      "-v",
+      "--tb=short",
+      "--strict-markers", 
+      "--strict-config",
+      "--cache-dir=.pytest_cache",
+      "--junit-xml=test_results/integration-results.xml",
+      "--cov=shared",
+      "--cov-report=xml:test_results/coverage.xml",
+      "--cov-report=html:test_results/coverage_html",
+      "--maxfail=5",
+      "--durations=10"
+    ]
+
+  # Performance Test Runner
+  performance-tests:
+    build:
+      context: ../../
+      dockerfile: ./packages/shared/tests/integration/Dockerfile.integration-tests
+    container_name: tiger-mcp-performance-tests
+    environment:
+      # Database Configuration
+      - DATABASE_URL=postgresql+asyncpg://tiger_test:tiger_test@postgres-test:5432/tiger_mcp_test
+      - REDIS_URL=redis://redis-test:6379/15
+      
+      # Test Configuration
+      - ENVIRONMENT=test
+      - LOG_LEVEL=INFO
+      - PERFORMANCE_TEST_MODE=true
+      
+      # Performance Test Configuration
+      - LOAD_TEST_DURATION=60
+      - CONCURRENT_USERS=50
+      - MAX_OPERATIONS=1000
+      - TARGET_RESPONSE_TIME=0.5
+      
+      # Resource Limits
+      - MEMORY_LIMIT=2G
+      - CPU_LIMIT=2.0
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy  
+      db-setup-test:
+        condition: service_completed_successfully
+    networks:
+      - tiger-mcp-test-network
+    volumes:
+      - ./tests/integration/test_results:/app/test_results
+    working_dir: /app/packages/shared
+    profiles:
+      - performance
+    command: [
+      "python", "-m", "pytest", 
+      "tests/integration/",
+      "-v",
+      "-m", "performance",
+      "--junit-xml=test_results/performance-results.xml",
+      "--tb=short"
+    ]
+
+  # Load Test Runner (for high-load scenarios)
+  load-tests:
+    build:
+      context: ../../
+      dockerfile: ./packages/shared/tests/integration/Dockerfile.integration-tests
+    container_name: tiger-mcp-load-tests
+    environment:
+      # Database Configuration with Connection Pooling
+      - DATABASE_URL=postgresql+asyncpg://tiger_test:tiger_test@postgres-test:5432/tiger_mcp_test
+      - DATABASE_POOL_SIZE=20
+      - DATABASE_MAX_OVERFLOW=30
+      
+      - REDIS_URL=redis://redis-test:6379/15
+      - REDIS_POOL_SIZE=20
+      
+      # Load Test Configuration
+      - ENVIRONMENT=load_test
+      - LOG_LEVEL=WARNING
+      - LOAD_TEST_MODE=true
+      
+      # Load Test Parameters
+      - LOAD_TEST_DURATION=300  # 5 minutes
+      - CONCURRENT_USERS=100
+      - MAX_OPERATIONS=10000
+      - RAMP_UP_TIME=30
+      - STEADY_STATE_TIME=240
+      - RAMP_DOWN_TIME=30
+      
+      # Performance Targets
+      - TARGET_THROUGHPUT=500  # operations/second
+      - TARGET_95TH_PERCENTILE=1.0  # 1 second
+      - MAX_ERROR_RATE=0.02  # 2%
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      db-setup-test:
+        condition: service_completed_successfully
+    networks:
+      - tiger-mcp-test-network
+    volumes:
+      - ./tests/integration/test_results:/app/test_results
+    working_dir: /app/packages/shared
+    profiles:
+      - load-test
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '2.0'
+          memory: 2G
+    command: [
+      "python", "-m", "pytest",
+      "tests/integration/",
+      "-v", 
+      "-m", "load_test",
+      "--junit-xml=test_results/load-test-results.xml",
+      "--tb=line",
+      "--maxfail=10"
+    ]
+
+  # Test Report Generator
+  test-reports:
+    image: python:3.11-slim
+    container_name: tiger-mcp-test-reports  
+    environment:
+      - REPORT_OUTPUT_DIR=/app/test_results
+    depends_on:
+      - integration-tests
+    networks:
+      - tiger-mcp-test-network
+    volumes:
+      - ./tests/integration/test_results:/app/test_results
+      - ./tests/integration/report_templates:/app/templates:ro
+    working_dir: /app
+    profiles:
+      - reporting
+    command: [
+      "python", "-c",
+      "
+import os
+import json
+import xml.etree.ElementTree as ET
+from datetime import datetime
+
+def generate_summary_report():
+    results_dir = '/app/test_results'
+    
+    # Parse JUnit XML files
+    test_files = [
+        'integration-results.xml',
+        'performance-results.xml', 
+        'load-test-results.xml'
+    ]
+    
+    summary = {
+        'generated_at': datetime.now().isoformat(),
+        'test_suites': {},
+        'totals': {
+            'tests': 0,
+            'failures': 0,
+            'errors': 0,
+            'skipped': 0,
+            'time': 0.0
+        }
+    }
+    
+    for test_file in test_files:
+        file_path = os.path.join(results_dir, test_file)
+        if os.path.exists(file_path):
+            try:
+                tree = ET.parse(file_path)
+                root = tree.getroot()
+                
+                suite_name = test_file.replace('-results.xml', '')
+                suite_data = {
+                    'tests': int(root.get('tests', 0)),
+                    'failures': int(root.get('failures', 0)), 
+                    'errors': int(root.get('errors', 0)),
+                    'skipped': int(root.get('skipped', 0)),
+                    'time': float(root.get('time', 0.0))
+                }
+                
+                summary['test_suites'][suite_name] = suite_data
+                
+                # Add to totals
+                for key in ['tests', 'failures', 'errors', 'skipped']:
+                    summary['totals'][key] += suite_data[key]
+                summary['totals']['time'] += suite_data['time']
+                    
+            except Exception as e:
+                print(f'Error parsing {test_file}: {e}')
+    
+    # Write summary report
+    with open(os.path.join(results_dir, 'test_summary.json'), 'w') as f:
+        json.dump(summary, f, indent=2)
+    
+    # Print summary
+    print('\\n=== Test Execution Summary ===')
+    print(f'Generated at: {summary[\"generated_at\"]}')
+    print(f'Total Tests: {summary[\"totals\"][\"tests\"]}')
+    print(f'Failures: {summary[\"totals\"][\"failures\"]}')
+    print(f'Errors: {summary[\"totals\"][\"errors\"]}') 
+    print(f'Skipped: {summary[\"totals\"][\"skipped\"]}')
+    print(f'Total Time: {summary[\"totals\"][\"time\"]:.2f}s')
+    
+    for suite_name, suite_data in summary['test_suites'].items():
+        print(f'\\n{suite_name}:')
+        print(f'  Tests: {suite_data[\"tests\"]}')
+        print(f'  Failures: {suite_data[\"failures\"]}')
+        print(f'  Time: {suite_data[\"time\"]:.2f}s')
+
+generate_summary_report()
+      "
+    ]
+
+volumes:
+  postgres_test_data:
+    name: tiger-mcp-postgres-test-data
+  redis_test_data:
+    name: tiger-mcp-redis-test-data
+  test_cache:
+    name: tiger-mcp-test-cache
+
+networks:
+  tiger-mcp-test-network:
+    name: tiger-mcp-test-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

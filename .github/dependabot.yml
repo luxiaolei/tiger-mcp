@@ -1,0 +1,299 @@
+# Dependabot configuration for Tiger MCP
+# Automated dependency updates across UV workspace and Docker containers
+
+version: 2
+updates:
+  # ===========================================================================
+  # PYTHON DEPENDENCIES (UV WORKSPACE)
+  # ===========================================================================
+  
+  # Root workspace pyproject.toml
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "team-leads"
+      - "maintainers"
+    assignees:
+      - "maintainers"
+    labels:
+      - "dependencies"
+      - "python"
+      - "workspace-root"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps(dev)"
+      include: "scope"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    ignore:
+      # Ignore major version updates for critical dependencies
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+    
+  # MCP Server package
+  - package-ecosystem: "pip" 
+    directory: "/packages/mcp-server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "backend-team"
+      - "mcp-maintainers"
+    labels:
+      - "dependencies"
+      - "mcp-server"
+      - "backend"
+    commit-message:
+      prefix: "deps(mcp-server)"
+      include: "scope"
+    allow:
+      - dependency-type: "direct"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+        
+  # Dashboard API package
+  - package-ecosystem: "pip"
+    directory: "/packages/dashboard-api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "backend-team"
+      - "api-maintainers"
+    labels:
+      - "dependencies"
+      - "dashboard-api"
+      - "backend"
+    commit-message:
+      prefix: "deps(dashboard-api)"
+      include: "scope"
+    allow:
+      - dependency-type: "direct"
+    ignore:
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+        
+  # Database package
+  - package-ecosystem: "pip"
+    directory: "/packages/database"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:30"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "backend-team"
+      - "database-maintainers"
+    labels:
+      - "dependencies"
+      - "database"
+      - "backend"
+    commit-message:
+      prefix: "deps(database)"
+      include: "scope"
+    allow:
+      - dependency-type: "direct"
+    ignore:
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "alembic"
+        update-types: ["version-update:semver-major"]
+        
+  # Shared package
+  - package-ecosystem: "pip"
+    directory: "/packages/shared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "backend-team"
+      - "shared-maintainers"
+    labels:
+      - "dependencies"
+      - "shared"
+      - "backend"
+    commit-message:
+      prefix: "deps(shared)"
+      include: "scope"
+    allow:
+      - dependency-type: "direct"
+    ignore:
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+
+  # ===========================================================================
+  # DOCKER DEPENDENCIES
+  # ===========================================================================
+  
+  # MCP Server Docker
+  - package-ecosystem: "docker"
+    directory: "/docker/mcp-server"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "devops-team"
+      - "security-team"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "mcp-server"
+      - "infrastructure"
+    commit-message:
+      prefix: "deps(docker/mcp-server)"
+      include: "scope"
+    ignore:
+      # Pin Python base image to specific minor versions for stability
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+        
+  # Dashboard API Docker  
+  - package-ecosystem: "docker"
+    directory: "/docker/dashboard-api"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:30"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "devops-team"
+      - "security-team"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "dashboard-api"
+      - "infrastructure"
+    commit-message:
+      prefix: "deps(docker/dashboard-api)"
+      include: "scope"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+        
+  # Database Docker
+  - package-ecosystem: "docker"
+    directory: "/docker/database"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "07:00"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "devops-team"
+      - "database-team"
+      - "security-team"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "database"
+      - "infrastructure"
+    commit-message:
+      prefix: "deps(docker/database)"
+      include: "scope"
+    ignore:
+      # Database versions should be carefully managed
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "postgresql"
+        update-types: ["version-update:semver-major"]
+
+  # ===========================================================================
+  # GITHUB ACTIONS DEPENDENCIES
+  # ===========================================================================
+  
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly" 
+      day: "friday"
+      time: "06:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "devops-team"
+      - "ci-maintainers"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci-cd"
+    commit-message:
+      prefix: "deps(actions)"
+      include: "scope"
+    allow:
+      - dependency-type: "direct"
+    ignore:
+      # Major version updates for actions often require workflow changes
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ===========================================================================
+  # DEVELOPMENT AND TESTING DEPENDENCIES  
+  # ===========================================================================
+  
+  # Root development dependencies (separate from main deps)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "first-monday" 
+      time: "10:00"
+    open-pull-requests-limit: 3
+    target-branch: "develop"
+    reviewers:
+      - "dev-tools-team"
+    labels:
+      - "dependencies"
+      - "dev-tools"
+      - "testing"
+    commit-message:
+      prefix: "deps(dev-tools)"
+    allow:
+      - dependency-type: "development"
+    ignore:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+
+  # ===========================================================================
+  # SECURITY UPDATES (PRIORITY)
+  # ===========================================================================
+  
+  # High-frequency security updates
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "02:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "security-team"
+      - "maintainers"
+    assignees:
+      - "security-team"
+    labels:
+      - "dependencies"
+      - "security"
+      - "critical"
+    commit-message:
+      prefix: "security"
+      include: "scope"
+    allow:
+      - dependency-type: "security"
+    target-branch: "security-updates"

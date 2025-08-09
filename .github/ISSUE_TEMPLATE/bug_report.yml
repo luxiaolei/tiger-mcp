@@ -1,0 +1,200 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in the Tiger MCP System
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible to help us investigate and fix the issue.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight Checklist
+      description: Please confirm you have completed the following
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have read the documentation and troubleshooting guide
+          required: true
+        - label: I am running the latest version or a supported version
+          required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - MCP Server
+        - Dashboard API
+        - Database
+        - Shared Libraries
+        - Docker/Infrastructure
+        - CI/CD
+        - Documentation
+        - Tiger API Integration
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: In which environment did this occur?
+      options:
+        - Development
+        - Staging
+        - Production
+        - Docker Compose
+        - Local Setup
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version are you using? (check git commit hash or tag)
+      placeholder: "v1.0.0 or commit hash"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: Describe what happened and what you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Execute command '...'
+        4. See error
+      value: |
+        1. 
+        2. 
+        3. 
+        4. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe the expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: Describe what actually happened, including error messages
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Please include relevant logs, error messages, or stack traces
+      render: text
+      placeholder: |
+        Paste logs here. Include:
+        - Error messages
+        - Stack traces
+        - Relevant application logs
+        - Database logs (if applicable)
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Relevant configuration details (remove sensitive information)
+      render: yaml
+      placeholder: |
+        # Docker Compose settings
+        # Environment variables (sanitized)
+        # Database connection details (no credentials)
+        # Any relevant configuration
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - Critical (System unusable, data loss, security issue)
+        - High (Major feature broken, workaround difficult)
+        - Medium (Feature partially broken, workaround available)
+        - Low (Minor issue, easy workaround)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequency
+      description: How often does this occur?
+      options:
+        - Always (100%)
+        - Often (75-99%)
+        - Sometimes (25-74%)
+        - Rarely (1-24%)
+        - Once
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Business Impact
+      description: What is the impact on users or business operations?
+      placeholder: Describe the impact this bug has on users, workflows, or business operations
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Is there a workaround for this issue?
+      placeholder: Describe any temporary solutions or workarounds you've found
+
+  - type: textarea
+    id: system_info
+    attributes:
+      label: System Information
+      description: Relevant system information
+      render: text
+      placeholder: |
+        OS: Ubuntu 20.04
+        Python: 3.11.5
+        UV: 0.1.0
+        Docker: 24.0.6
+        Docker Compose: 2.21.0
+        Browser: Chrome 118.0 (if applicable)
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any additional context, screenshots, or information
+      placeholder: |
+        - Screenshots (if UI-related)
+        - Related issues or PRs
+        - Timeline of when this started occurring
+        - Any recent changes that might be related

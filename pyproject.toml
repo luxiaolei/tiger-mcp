@@ -1,0 +1,49 @@
+[project]
+name = "tiger-mcp-workspace"
+version = "0.1.0"
+description = "Tiger Brokers MCP (Model Context Protocol) System - Multi-package workspace"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "packages/mcp-server",
+    "packages/dashboard-api", 
+    "packages/database",
+    "packages/shared"
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.14.1",
+    "pytest-cov>=6.2.1",
+    "pytest-redis>=3.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.3.0",
+    "bandit>=1.8.6",
+    "coverage>=7.10.2",
+    "httpx>=0.28.1",
+    "fakeredis>=2.17.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

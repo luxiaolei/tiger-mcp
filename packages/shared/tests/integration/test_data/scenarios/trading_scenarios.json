@@ -1,0 +1,437 @@
+{
+  "basic_trading_scenarios": {
+    "buy_market_order": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "AAPL",
+      "action": "BUY",
+      "order_type": "MKT",
+      "quantity": 100,
+      "expected_result": "success",
+      "account_requirements": {
+        "min_buying_power": 15100.0,
+        "required_permissions": ["US_STOCK"]
+      },
+      "expected_response": {
+        "order_id": "ORDER123456789",
+        "status": "SUBMITTED"
+      }
+    },
+    "sell_limit_order": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "MSFT",
+      "action": "SELL",
+      "order_type": "LMT",
+      "quantity": 50,
+      "price": 335.00,
+      "expected_result": "success",
+      "account_requirements": {
+        "min_position": 50,
+        "required_permissions": ["US_STOCK"]
+      },
+      "expected_response": {
+        "order_id": "ORDER234567890",
+        "status": "SUBMITTED"
+      }
+    },
+    "buy_limit_order": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "GOOGL",
+      "action": "BUY", 
+      "order_type": "LMT",
+      "quantity": 10,
+      "price": 2740.00,
+      "time_in_force": "GTC",
+      "expected_result": "success",
+      "account_requirements": {
+        "min_buying_power": 27500.0,
+        "required_permissions": ["US_STOCK"]
+      },
+      "expected_response": {
+        "order_id": "ORDER345678901",
+        "status": "SUBMITTED"
+      }
+    },
+    "sell_stop_loss": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "TSLA",
+      "action": "SELL",
+      "order_type": "STP",
+      "quantity": 25,
+      "stop_price": 1000.00,
+      "expected_result": "success",
+      "account_requirements": {
+        "min_position": 25,
+        "required_permissions": ["US_STOCK"]
+      },
+      "expected_response": {
+        "order_id": "ORDER456789012",
+        "status": "SUBMITTED"
+      }
+    }
+  },
+  "error_scenarios": {
+    "insufficient_funds": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "AMZN",
+      "action": "BUY",
+      "order_type": "MKT", 
+      "quantity": 1000,
+      "expected_result": "error",
+      "expected_error": {
+        "code": 40501,
+        "message": "Insufficient buying power"
+      },
+      "account_requirements": {
+        "min_buying_power": 3350000.0
+      }
+    },
+    "invalid_symbol": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "INVALID_SYMBOL",
+      "action": "BUY",
+      "order_type": "MKT",
+      "quantity": 100,
+      "expected_result": "error",
+      "expected_error": {
+        "code": 40404,
+        "message": "Symbol not found"
+      }
+    },
+    "invalid_quantity": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "AAPL",
+      "action": "BUY",
+      "order_type": "MKT",
+      "quantity": -100,
+      "expected_result": "error",
+      "expected_error": {
+        "code": 40400,
+        "message": "Invalid order parameters"
+      }
+    },
+    "market_closed": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "AAPL",
+      "action": "BUY",
+      "order_type": "MKT",
+      "quantity": 100,
+      "expected_result": "error",
+      "expected_error": {
+        "code": 42001,
+        "message": "Market is closed"
+      },
+      "market_conditions": {
+        "market_status": "CLOSED",
+        "trading_session": "AFTER_HOURS"
+      }
+    },
+    "position_not_found": {
+      "operation_type": "PLACE_ORDER",
+      "symbol": "NVDA",
+      "action": "SELL",
+      "order_type": "MKT",
+      "quantity": 100,
+      "expected_result": "error",
+      "expected_error": {
+        "code": 40503,
+        "message": "Insufficient shares to sell"
+      },
+      "account_requirements": {
+        "current_position": 0
+      }
+    }
+  },
+  "multi_account_scenarios": {
+    "cross_account_trading": {
+      "description": "Test trading operations across multiple accounts",
+      "accounts": ["DU1234567", "DU2345678", "DU3456789"],
+      "operations": [
+        {
+          "account": "DU1234567",
+          "operation": "buy_market_order",
+          "symbol": "AAPL",
+          "quantity": 100
+        },
+        {
+          "account": "DU2345678", 
+          "operation": "buy_limit_order",
+          "symbol": "MSFT",
+          "quantity": 50,
+          "price": 325.00
+        },
+        {
+          "account": "DU3456789",
+          "operation": "sell_limit_order",
+          "symbol": "GOOGL",
+          "quantity": 25,
+          "price": 2800.00
+        }
+      ],
+      "expected_results": {
+        "all_success": true,
+        "account_isolation": true,
+        "proper_routing": true
+      }
+    },
+    "failover_scenario": {
+      "description": "Test account failover when primary account fails",
+      "primary_account": "DU1234567",
+      "fallback_accounts": ["DU2345678", "DU3456789"],
+      "failure_conditions": {
+        "primary_account_status": "SUSPENDED",
+        "error_message": "Account temporarily unavailable"
+      },
+      "operation": {
+        "symbol": "AAPL",
+        "action": "BUY",
+        "quantity": 100,
+        "order_type": "MKT"
+      },
+      "expected_result": {
+        "failover_successful": true,
+        "fallback_account_used": "DU2345678"
+      }
+    },
+    "load_balancing": {
+      "description": "Test load balancing across multiple accounts",
+      "accounts": ["DU1234567", "DU2345678", "DU3456789"],
+      "operations": [
+        {"operation_id": 1, "symbol": "AAPL", "quantity": 10},
+        {"operation_id": 2, "symbol": "MSFT", "quantity": 20},
+        {"operation_id": 3, "symbol": "GOOGL", "quantity": 5},
+        {"operation_id": 4, "symbol": "AMZN", "quantity": 15},
+        {"operation_id": 5, "symbol": "TSLA", "quantity": 8},
+        {"operation_id": 6, "symbol": "META", "quantity": 12}
+      ],
+      "load_balancing_strategy": "ROUND_ROBIN",
+      "expected_distribution": {
+        "DU1234567": [1, 4],
+        "DU2345678": [2, 5], 
+        "DU3456789": [3, 6]
+      }
+    }
+  },
+  "performance_scenarios": {
+    "high_frequency_orders": {
+      "description": "Test system under high-frequency order placement",
+      "duration_seconds": 60,
+      "orders_per_second": 10,
+      "symbols": ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"],
+      "order_types": ["MKT", "LMT"],
+      "quantity_range": [10, 100],
+      "expected_performance": {
+        "success_rate": 0.95,
+        "avg_response_time_ms": 500,
+        "max_response_time_ms": 2000
+      }
+    },
+    "concurrent_users": {
+      "description": "Test system with multiple concurrent users",
+      "concurrent_users": 50,
+      "operations_per_user": 20,
+      "test_duration_seconds": 120,
+      "user_behavior": {
+        "market_data_requests": 0.4,
+        "portfolio_requests": 0.3,
+        "order_placements": 0.2,
+        "order_status_checks": 0.1
+      },
+      "expected_performance": {
+        "system_stability": true,
+        "response_degradation": "< 20%",
+        "error_rate": "< 2%"
+      }
+    },
+    "stress_testing": {
+      "description": "Stress test system limits",
+      "peak_load_multiplier": 5,
+      "sustained_duration_minutes": 10,
+      "operations": {
+        "market_data_requests": 1000,
+        "account_info_requests": 500,
+        "order_placements": 200,
+        "portfolio_requests": 300
+      },
+      "expected_behavior": {
+        "graceful_degradation": true,
+        "circuit_breaker_activation": true,
+        "recovery_after_load": true
+      }
+    }
+  },
+  "edge_cases": {
+    "partial_fills": {
+      "description": "Test handling of partial order fills",
+      "order": {
+        "symbol": "AAPL",
+        "action": "BUY",
+        "quantity": 1000,
+        "order_type": "LMT",
+        "price": 149.00
+      },
+      "fill_scenarios": [
+        {"fill_quantity": 250, "fill_price": 149.00},
+        {"fill_quantity": 300, "fill_price": 149.00},
+        {"fill_quantity": 450, "fill_price": 149.05}
+      ],
+      "expected_result": {
+        "total_filled": 1000,
+        "avg_fill_price": 149.02,
+        "status": "FILLED"
+      }
+    },
+    "order_modifications": {
+      "description": "Test order modification scenarios",
+      "original_order": {
+        "order_id": "ORDER123456789",
+        "symbol": "MSFT",
+        "action": "BUY",
+        "quantity": 100,
+        "order_type": "LMT",
+        "price": 330.00
+      },
+      "modifications": [
+        {
+          "modification_type": "PRICE",
+          "new_price": 325.00,
+          "expected_result": "success"
+        },
+        {
+          "modification_type": "QUANTITY",
+          "new_quantity": 150,
+          "expected_result": "success"
+        },
+        {
+          "modification_type": "CANCEL",
+          "expected_result": "success"
+        }
+      ]
+    },
+    "after_hours_trading": {
+      "description": "Test after-hours trading scenarios",
+      "market_conditions": {
+        "market_status": "CLOSED",
+        "trading_session": "AFTER_HOURS",
+        "extended_hours_enabled": true
+      },
+      "orders": [
+        {
+          "symbol": "AAPL",
+          "action": "BUY",
+          "quantity": 100,
+          "order_type": "LMT",
+          "price": 149.50,
+          "time_in_force": "EXT",
+          "expected_result": "success"
+        },
+        {
+          "symbol": "MSFT",
+          "action": "SELL",
+          "quantity": 50,
+          "order_type": "MKT",
+          "expected_result": "error",
+          "expected_error": "Market orders not allowed in extended hours"
+        }
+      ]
+    },
+    "corporate_actions": {
+      "description": "Test handling of corporate actions",
+      "scenarios": [
+        {
+          "action_type": "STOCK_SPLIT",
+          "symbol": "AAPL",
+          "split_ratio": "4:1",
+          "ex_date": "2024-01-15",
+          "position_before": {
+            "quantity": 100,
+            "avg_cost": 600.00
+          },
+          "position_after": {
+            "quantity": 400,
+            "avg_cost": 150.00
+          }
+        },
+        {
+          "action_type": "DIVIDEND",
+          "symbol": "MSFT",
+          "dividend_amount": 2.50,
+          "ex_date": "2024-02-15",
+          "record_date": "2024-02-17",
+          "payment_date": "2024-03-15",
+          "position": {
+            "quantity": 100,
+            "expected_dividend": 250.00
+          }
+        }
+      ]
+    }
+  },
+  "integration_scenarios": {
+    "end_to_end_workflow": {
+      "description": "Complete trading workflow from market data to settlement",
+      "workflow_steps": [
+        {
+          "step": 1,
+          "action": "get_market_data",
+          "symbols": ["AAPL", "MSFT"],
+          "expected_data": ["latest_price", "volume", "bid_ask"]
+        },
+        {
+          "step": 2,
+          "action": "check_buying_power",
+          "account": "DU1234567",
+          "expected_min_power": 50000.0
+        },
+        {
+          "step": 3,
+          "action": "place_order",
+          "order_details": {
+            "symbol": "AAPL",
+            "action": "BUY",
+            "quantity": 100,
+            "order_type": "MKT"
+          }
+        },
+        {
+          "step": 4,
+          "action": "monitor_order_status",
+          "polling_interval": 5,
+          "max_wait_time": 300
+        },
+        {
+          "step": 5,
+          "action": "verify_position_update",
+          "expected_position": {
+            "symbol": "AAPL",
+            "quantity": 100
+          }
+        },
+        {
+          "step": 6,
+          "action": "check_account_balance",
+          "expected_change": "decrease_by_order_value"
+        }
+      ]
+    },
+    "cross_system_validation": {
+      "description": "Validate data consistency across systems",
+      "validation_points": [
+        {
+          "system": "trading_engine",
+          "data": "order_status",
+          "sync_with": ["portfolio_system", "risk_management"]
+        },
+        {
+          "system": "portfolio_system", 
+          "data": "position_quantities",
+          "sync_with": ["settlement_system", "reporting_system"]
+        },
+        {
+          "system": "risk_management",
+          "data": "exposure_limits",
+          "sync_with": ["trading_engine", "compliance_system"]
+        }
+      ]
+    }
+  }
+}
