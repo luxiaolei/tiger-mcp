@@ -1,0 +1,37 @@
+{
+  "tiger_accounts": {
+    "YOUR_LIVE_ACCOUNT_1": {
+      "tiger_id": "YOUR_TIGER_ID_1",
+      "account_type": "live",
+      "license": "TBHK",
+      "environment": "PROD",
+      "config_file": "tiger_openapi_config.properties"
+    },
+    "YOUR_LIVE_ACCOUNT_2": {
+      "tiger_id": "YOUR_TIGER_ID_2", 
+      "account_type": "live",
+      "license": "TBHK",
+      "environment": "PROD",
+      "config_file": "tiger_openapi_config.properties.wm"
+    },
+    "YOUR_DEMO_ACCOUNT": {
+      "tiger_id": "YOUR_TIGER_ID_2",
+      "account_type": "demo", 
+      "license": "TBHK",
+      "environment": "PROD",
+      "config_file": "tiger_openapi_config.properties.wm"
+    }
+  },
+  "api_keys": {
+    "YOUR_CLIENT_API_KEY_1": {
+      "name": "Full Access Client",
+      "allowed_accounts": ["YOUR_LIVE_ACCOUNT_1", "YOUR_LIVE_ACCOUNT_2", "YOUR_DEMO_ACCOUNT"],
+      "permissions": ["read", "trade"]
+    },
+    "YOUR_CLIENT_API_KEY_2": {
+      "name": "Demo Only Client", 
+      "allowed_accounts": ["YOUR_DEMO_ACCOUNT"],
+      "permissions": ["read", "trade"]
+    }
+  }
+}

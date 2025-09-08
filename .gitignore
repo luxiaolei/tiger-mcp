@@ -189,3 +189,36 @@ secrets.toml
 
 # References and external code (not part of main codebase)
 references/
+
+# Tiger Brokers sensitive files (NEVER commit these!)
+tiger_openapi_config.properties
+tiger_openapi_token.properties
+config/tiger_accounts.json
+.mcp.json
+
+# Allow example files to be committed
+!tiger_openapi_config.properties.example
+!tiger_openapi_token.properties.example
+!config/tiger_accounts.json.example
+!.mcp.json.example
+
+# Block other variants with credentials
+tiger_openapi_config.properties.wm
+tiger_openapi_config.properties.xl
+tiger_openapi_token.properties.wm  
+tiger_openapi_token.properties.xl
+
+# Test files with real credentials
+test_account*.py
+test_trading*.py
+test_options*.py
+test_cancel*.py
+test_greeks*.py
+test_tigr*.py
+test_market_data*.py
+comprehensive_test_report.py
+*_rest_api.py
+
+# Runtime generated files
+*.log
+*.pid

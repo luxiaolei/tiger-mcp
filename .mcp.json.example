@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "tiger-mcp": {
+      "command": "python",
+      "args": [
+        "-m", 
+        "tiger_mcp.mcp_client"
+      ],
+      "env": {
+        "TIGER_API_KEY": "YOUR_CLIENT_API_KEY_HERE",
+        "TIGER_SERVER_URL": "http://your-tiger-mcp-server:9000",
+        "DEFAULT_ACCOUNT": "YOUR_DEFAULT_ACCOUNT_HERE",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}

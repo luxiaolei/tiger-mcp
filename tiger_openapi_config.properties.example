@@ -1,0 +1,16 @@
+# Tiger API配置文件示例
+# 复制此文件为 tiger_openapi_config.properties 并填入你的真实信息
+
+# 私钥 (从Tiger开发者平台获取)
+private_key_pk1=YOUR_PRIVATE_KEY_PK1_HERE
+private_key_pk8=YOUR_PRIVATE_KEY_PK8_HERE
+
+# Tiger开发者信息 (从 https://quant.itiger.com/openapi/info 获取)
+tiger_id=YOUR_TIGER_ID_HERE
+account=YOUR_ACCOUNT_NUMBER_HERE
+
+# License (TBHK/TBSG/TBNZ等)
+license=TBHK
+
+# 环境 (PROD为生产环境，SANDBOX为测试环境)
+env=PROD

@@ -1,0 +1,5 @@
+# Tiger API Token文件示例
+# 复制此文件为 tiger_openapi_token.properties 并填入你的token
+
+# Token (从Tiger开发者平台获取，会自动刷新)
+token=YOUR_TIGER_TOKEN_HERE

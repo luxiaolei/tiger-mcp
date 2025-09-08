@@ -1,24 +1,55 @@
 # 🐅 Tiger MCP System
 
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-orange.svg)](https://modelcontextprotocol.org)
 [![Docker Support](https://img.shields.io/badge/docker-supported-blue.svg)](https://docker.com)
 [![UV Workspace](https://img.shields.io/badge/uv-workspace-purple.svg)](https://docs.astral.sh/uv/)
-[![Code Quality](https://img.shields.io/badge/code%20quality-black%20%7C%20isort%20%7C%20mypy-black.svg)](https://github.com/psf/black)
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
 [![Test Coverage](https://img.shields.io/badge/coverage-85%25-green.svg)](#)
 [![Dependencies](https://img.shields.io/badge/dependencies-up%20to%20date-green.svg)](#)
 [![Security Scan](https://img.shields.io/badge/security-bandit%20verified-green.svg)](#)
 
-[![GitHub stars](https://img.shields.io/github/stars/username/tiger-mcp?style=social)](#)
-[![GitHub issues](https://img.shields.io/github/issues/username/tiger-mcp)](#)
-[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
-
 > **Professional-grade Model Context Protocol (MCP) server for Tiger Brokers API integration with Claude AI**
 
-A comprehensive MCP server system that enables seamless integration between [Claude AI](https://claude.ai) and [Tiger Brokers](https://www.tigerbrokers.com) trading platform, featuring real-time market data, algorithmic trading capabilities, and intelligent portfolio management.
+Connect [Claude AI](https://claude.ai) directly to [Tiger Brokers](https://www.tigerbrokers.com) for AI-powered trading, portfolio management, and market analysis. Features 22 MCP tools, REST API access, and enterprise-grade security.
+
+---
+
+## ⚡ **Quick Installation**
+
+### Install from GitHub (Recommended)
+```bash
+# Install Tiger MCP
+pip install git+https://github.com/your-username/tiger-mcp.git
+
+# Setup configuration  
+cp tiger_openapi_config.properties.example tiger_openapi_config.properties
+cp .mcp.json.example .mcp.json
+
+# Edit with your Tiger API credentials
+nano tiger_openapi_config.properties
+nano .mcp.json
+
+# Ready to use!
+```
+
+### Use with Claude Code
+1. Install: `pip install git+https://github.com/your-username/tiger-mcp.git`
+2. Configure `.mcp.json` with your Tiger API credentials
+3. Restart Claude Code  
+4. Start trading: *"Show me my Tiger Brokers portfolio"*
+
+### Use as REST API
+```python
+import requests
+
+response = requests.post("http://server:9000/tiger/get_positions",
+    headers={"Authorization": "Bearer your_api_key"}, 
+    json={"account": "your_account_number"}
+)
+```
 
 ---
 
