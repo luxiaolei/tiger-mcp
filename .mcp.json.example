@@ -4,7 +4,7 @@
       "command": "python",
       "args": [
         "-m", 
-        "tiger_mcp.mcp_client"
+        "tiger_mcp.server"
       ],
       "env": {
         "TIGER_API_KEY": "YOUR_CLIENT_API_KEY_HERE",
