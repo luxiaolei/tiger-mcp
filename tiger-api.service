@@ -1,0 +1,16 @@
+[Unit]
+Description=Tiger MCP REST API Full Edition
+After=network.target
+
+[Service]
+Type=simple
+User=trader
+WorkingDirectory=/home/trader/tiger-mcp
+ExecStart=/usr/bin/python3 tiger_rest_api_full.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/trader/tiger-mcp/rest_api_full.log
+StandardError=append:/home/trader/tiger-mcp/rest_api_full.log
+
+[Install]
+WantedBy=multi-user.target
