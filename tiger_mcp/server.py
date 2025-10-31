@@ -5,8 +5,23 @@ Professional Tiger Brokers MCP integration
 """
 
 import json
+import os
 import sys
+from typing import Any, Dict, Tuple
+
 import requests
+
+
+ENDPOINT_MAP: Dict[str, Tuple[str, str]] = {
+    "get_positions": ("POST", "/api/trade/positions"),
+    "get_account_info": ("POST", "/api/trade/account-info"),
+    "place_order": ("POST", "/api/trade/place-order"),
+    "cancel_order": ("POST", "/api/trade/cancel-order"),
+    "get_orders": ("POST", "/api/trade/orders"),
+    "list_accounts": ("GET", "/api/accounts"),
+}
+
+REST_API_BASE = os.environ.get("TIGER_REST_API_URL", "http://localhost:9000").rstrip("/")
 
 def mcp_response(request_id, result):
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
@@ -14,18 +29,35 @@ def mcp_response(request_id, result):
 def mcp_error(request_id, code, message):
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
-def call_tiger_api(endpoint, data):
-    """调用Tiger REST API"""
+def call_tiger_api(endpoint: str, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """Call the unified REST API and normalize responses."""
+    method, path = ENDPOINT_MAP.get(endpoint, ("POST", f"/api/{endpoint}"))
+    url = f"{REST_API_BASE}{path}"
+    headers = {"Authorization": "Bearer client_key_demo"}
+
     try:
-        response = requests.post(
-            f"http://localhost:9000/tiger/{endpoint}",
-            headers={"Authorization": "Bearer client_key_demo", "Content-Type": "application/json"},
-            json=data,
-            timeout=10
-        )
-        return response.json()
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+        if method == "GET":
+            response = requests.get(url, headers=headers, params=data, timeout=10)
+        else:
+            payload = data or {}
+            response = requests.post(url, headers=headers, json=payload, timeout=10)
+
+        try:
+            body = response.json()
+        except ValueError:
+            body = {"detail": response.text or f"HTTP {response.status_code}"}
+
+        if response.status_code >= 400 or not isinstance(body, dict) or "success" not in body:
+            detail = ""
+            if isinstance(body, dict):
+                detail = body.get("error") or body.get("detail") or "Unknown error"
+            else:
+                detail = str(body)
+            return {"success": False, "error": detail}
+
+        return body
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
 
 def main():
     """MCP服务器主函数"""
@@ -103,11 +135,12 @@ def main():
                     if api_result["success"]:
                         data = api_result["data"]
                         result_text = f"💰 Tiger账户 (账户: {account})\\n\\n"
-                        result_text += f"总资产: ${data.get('total_assets', 0):,.2f}\\n"
+                        result_text += f"净资产: ${data.get('net_liquidation', 0):,.2f}\\n"
                         result_text += f"现金: ${data.get('cash_balance', 0):,.2f}\\n"
                         result_text += f"购买力: ${data.get('buying_power', 0):,.2f}\\n"
                         result_text += f"持仓价值: ${data.get('gross_position_value', 0):,.2f}\\n"
-                        result_text += f"未实现盈亏: ${data.get('unrealized_pnl', 0):,.2f}"
+                        result_text += f"未实现盈亏: ${data.get('unrealized_pnl', 0):,.2f}\\n"
+                        result_text += f"已实现盈亏: ${data.get('realized_pnl', 0):,.2f}"
                     else:
                         result_text = f"❌ 错误: {api_result['error']}"
                     

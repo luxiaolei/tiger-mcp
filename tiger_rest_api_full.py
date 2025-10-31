@@ -1128,7 +1128,8 @@ async def shutdown_event():
 # Main Entry Point
 # ============================================================================
 
-if __name__ == "__main__":
+def run(host: str = "0.0.0.0", port: int = 9000, log_level: str = "info") -> None:
+    """Launch the FastAPI server."""
     logger.info("=" * 80)
     logger.info("Tiger MCP REST API Server - Full Edition v2.0.0")
     logger.info("=" * 80)
@@ -1142,7 +1143,11 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=9000,
-        log_level="info"
+        host=host,
+        port=port,
+        log_level=log_level
     )
+
+
+if __name__ == "__main__":
+    run()

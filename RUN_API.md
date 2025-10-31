@@ -220,9 +220,6 @@ lsof -i :9000
 
 # Kill it
 kill -9 <PID>
-
-# Or if it's the old API
-pkill -f tiger_rest_api.py
 ```
 
 ### Can't Find Python

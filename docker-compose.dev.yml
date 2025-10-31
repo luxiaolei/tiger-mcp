@@ -82,13 +82,14 @@ services:
       # Cache Configuration  
       - REDIS_URL=redis://redis:6379/0
       
-      # Application Configuration
+      # Application Configuration  
       - LOG_LEVEL=${LOG_LEVEL:-debug}
       - DEBUG=${DEBUG:-true}
       - ENVIRONMENT=development
       
       # Security
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - TIGER_REST_API_URL=${TIGER_REST_API_URL:-http://rest-api:9000}
     volumes:
       - ./logs:/app/logs
       - ./packages/mcp-server/src:/app:ro  # Development volume mount
@@ -101,6 +102,8 @@ services:
         condition: service_healthy
       db-migrate:
         condition: service_completed_successfully
+      rest-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -168,6 +171,33 @@ services:
         - action: sync
           path: ./packages/dashboard-api/src
           target: /app
+
+  # Tiger REST API (development)
+  rest-api:
+    build:
+      context: .
+      dockerfile: ./docker/rest-api/Dockerfile
+      target: production
+    container_name: tiger-mcp-rest-api-dev
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    volumes:
+      - ./logs:/app/logs
+      - ./tiger_rest_api_full.py:/app/tiger_rest_api_full.py
+      - ./references/openapi-python-sdk/tigeropen:/app/tigeropen:ro
+      - ./tiger_openapi_config.properties:/app/tiger_openapi_config.properties:ro
+      - ./tiger_openapi_token.properties:/app/tiger_openapi_token.properties:ro
+    ports:
+      - "${REST_API_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
 
 volumes:
   postgres_data_dev:

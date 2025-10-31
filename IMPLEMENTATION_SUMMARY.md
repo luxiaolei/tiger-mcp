@@ -179,10 +179,10 @@ Token valid indefinitely ♾️
 ### Starting the Server
 
 ```bash
-# Stop old API
-pkill -f tiger_rest_api.py
+# Stop running instance (if any)
+pkill -f tiger_rest_api_full.py || true
 
-# Start new API
+# Start API
 cd /home/trader/tiger-mcp
 python tiger_rest_api_full.py
 
