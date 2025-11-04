@@ -103,6 +103,65 @@ def _normalize_payload(payload: Any) -> List[Any]:
 
     return [_to_namespace(payload)]
 
+
+def _to_plain_dict(item: Any) -> Dict[str, Any]:
+    """Convert normalized objects into serializable dictionaries."""
+    if isinstance(item, SimpleNamespace):
+        return vars(item).copy()
+
+    if isinstance(item, dict):
+        return dict(item)
+
+    if hasattr(item, "__dict__") and item.__dict__:
+        return {
+            key: value
+            for key, value in vars(item).items()
+            if not key.startswith("_") and not callable(value)
+        }
+
+    attributes: Dict[str, Any] = {}
+    for attr in dir(item):
+        if attr.startswith("_"):
+            continue
+        value = getattr(item, attr)
+        if callable(value):
+            continue
+        attributes[attr] = value
+
+    return attributes if attributes else {"value": item}
+
+
+def _structure_option_chain(chain_payload: Any) -> Dict[str, Any]:
+    """Split option chain payload into calls, puts, and miscellaneous contracts."""
+    records = _normalize_payload(chain_payload)
+
+    calls: List[Dict[str, Any]] = []
+    puts: List[Dict[str, Any]] = []
+    other: List[Dict[str, Any]] = []
+
+    for entry in records:
+        contract = _to_plain_dict(entry)
+        side = str(
+            contract.get("put_call")
+            or contract.get("direction")
+            or contract.get("type")
+            or ""
+        ).upper()
+
+        if side == "CALL":
+            calls.append(contract)
+        elif side == "PUT":
+            puts.append(contract)
+        else:
+            other.append(contract)
+
+    return {
+        "total": len(records),
+        "calls": calls,
+        "puts": puts,
+        "other": other,
+    }
+
 API_KEYS = {
     "client_key_001": {
         "name": "Full Access Client",
@@ -631,12 +690,35 @@ async def get_option_chain(
             else:
                 expirations.append(entry)
 
+        chain_details: Optional[Dict[str, Any]] = None
+        if request.expiry:
+            option_chain = quote_client.get_option_chain(
+                request.symbol,
+                request.expiry,
+            )
+            structured_chain = _structure_option_chain(option_chain)
+
+            chain_details = {
+                "expiry": request.expiry,
+                "total": structured_chain["total"],
+                "calls": structured_chain["calls"],
+                "puts": structured_chain["puts"],
+            }
+
+            if structured_chain["other"]:
+                chain_details["other"] = structured_chain["other"]
+
+        response_payload: Dict[str, Any] = {
+            "symbol": request.symbol,
+            "expirations": expirations,
+        }
+
+        if chain_details:
+            response_payload["chain"] = chain_details
+
         return APIResponse(
             success=True,
-            data={
-                "symbol": request.symbol,
-                "expirations": expirations
-            },
+            data=response_payload,
             account=request.account
         )
     except Exception as e:

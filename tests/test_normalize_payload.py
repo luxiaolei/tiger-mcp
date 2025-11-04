@@ -3,7 +3,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from tiger_rest_api_full import _normalize_payload
+from tiger_rest_api_full import (
+    _normalize_payload,
+    _structure_option_chain,
+    _to_plain_dict,
+)
 
 
 class DummyDataFrame:
@@ -145,3 +149,43 @@ def test_normalize_leaves_strings_intact():
     result = _normalize_payload(payload)
 
     assert result == ["raw-token-value"]
+
+
+def test_to_plain_dict_handles_simple_namespace():
+    item = SimpleNamespace(strike=150, put_call="CALL")
+
+    result = _to_plain_dict(item)
+
+    assert result == {"strike": 150, "put_call": "CALL"}
+
+
+class ContractObject:
+    def __init__(self, strike, side):
+        self.strike = strike
+        self.put_call = side
+        self.last_price = 1.25
+
+
+def test_to_plain_dict_handles_custom_object():
+    item = ContractObject(125, "PUT")
+
+    result = _to_plain_dict(item)
+
+    assert result["strike"] == 125
+    assert result["put_call"] == "PUT"
+    assert result["last_price"] == 1.25
+
+
+def test_structure_option_chain_splits_calls_puts_other():
+    payload = [
+        {"put_call": "CALL", "strike": 100},
+        {"put_call": "PUT", "strike": 110},
+        {"strike": 120},
+    ]
+
+    structured = _structure_option_chain(payload)
+
+    assert structured["total"] == 3
+    assert [c["strike"] for c in structured["calls"]] == [100]
+    assert [p["strike"] for p in structured["puts"]] == [110]
+    assert [o["strike"] for o in structured["other"]] == [120]
