@@ -145,6 +145,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DEBUG=false
       - ENVIRONMENT=production
+      - TIGER_REST_API_URL=${TIGER_REST_API_URL:-http://rest-api:9000}
       
       # Security
       - SECRET_KEY_FILE=/run/secrets/secret_key
@@ -159,6 +160,8 @@ services:
         condition: service_healthy
       db-migrate:
         condition: service_completed_successfully
+      rest-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 60s
@@ -246,6 +249,47 @@ services:
         reservations:
           memory: 512M
           cpus: '0.5'
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 3
+
+  # Tiger REST API
+  rest-api:
+    build:
+      context: .
+      dockerfile: ./docker/rest-api/Dockerfile
+      target: production
+    container_name: tiger-mcp-rest-api-prod
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./logs:/app/logs
+      - ./tiger_openapi_config.properties:/app/tiger_openapi_config.properties:ro
+      - ./tiger_openapi_token.properties:/app/tiger_openapi_token.properties:ro
+    expose:
+      - "9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    networks:
+      - tiger-mcp-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
       update_config:
         parallelism: 1
         delay: 30s

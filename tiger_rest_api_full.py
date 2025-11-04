@@ -6,8 +6,10 @@ Tiger MCP REST API Server - Full Version with Token Refresh
 
 import asyncio
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import uvicorn
@@ -38,6 +40,127 @@ security = HTTPBearer()
 # ============================================================================
 # Configuration
 # ============================================================================
+
+def _to_namespace(item: Any) -> Any:
+    """Convert dictionaries to SimpleNamespace for attribute-style access."""
+    if isinstance(item, dict):
+        return SimpleNamespace(**item)
+    return item
+
+
+def _coerce_iterable(obj: Any) -> List[Any]:
+    """Ensure arbitrary objects become list-like without triggering truthiness checks."""
+    if obj is None:
+        return []
+
+    if isinstance(obj, list):
+        return obj
+
+    if isinstance(obj, tuple):
+        return list(obj)
+
+    if isinstance(obj, dict):
+        return [obj]
+
+    if isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
+        try:
+            return list(obj)
+        except TypeError:
+            return [obj]
+
+    return [obj]
+
+
+def _normalize_payload(payload: Any) -> List[Any]:
+    """Normalize Tiger SDK responses into iterable collections we can inspect safely."""
+    if payload is None:
+        return []
+
+    if isinstance(payload, (list, tuple)):
+        return [_to_namespace(obj) for obj in payload]
+
+    if isinstance(payload, dict):
+        return [_to_namespace(payload)]
+
+    # Handle pandas DataFrames or other objects exposing to_dict()
+    to_dict = getattr(payload, "to_dict", None)
+    if callable(to_dict):
+        try:
+            records = to_dict(orient="records")  # pandas.DataFrame signature
+        except TypeError:
+            records = to_dict()
+
+        except ValueError as exc:
+            if "truth value of a DataFrame is ambiguous" in str(exc):
+                records = to_dict(orient="records")
+            else:
+                raise
+
+        return [_to_namespace(record) for record in _coerce_iterable(records)]
+
+    if isinstance(payload, Iterable) and not isinstance(payload, (str, bytes)):
+        return [_to_namespace(item) for item in _coerce_iterable(payload)]
+
+    return [_to_namespace(payload)]
+
+
+def _to_plain_dict(item: Any) -> Dict[str, Any]:
+    """Convert normalized objects into serializable dictionaries."""
+    if isinstance(item, SimpleNamespace):
+        return vars(item).copy()
+
+    if isinstance(item, dict):
+        return dict(item)
+
+    if hasattr(item, "__dict__") and item.__dict__:
+        return {
+            key: value
+            for key, value in vars(item).items()
+            if not key.startswith("_") and not callable(value)
+        }
+
+    attributes: Dict[str, Any] = {}
+    for attr in dir(item):
+        if attr.startswith("_"):
+            continue
+        value = getattr(item, attr)
+        if callable(value):
+            continue
+        attributes[attr] = value
+
+    return attributes if attributes else {"value": item}
+
+
+def _structure_option_chain(chain_payload: Any) -> Dict[str, Any]:
+    """Split option chain payload into calls, puts, and miscellaneous contracts."""
+    records = _normalize_payload(chain_payload)
+
+    calls: List[Dict[str, Any]] = []
+    puts: List[Dict[str, Any]] = []
+    other: List[Dict[str, Any]] = []
+
+    for entry in records:
+        contract = _to_plain_dict(entry)
+        side = str(
+            contract.get("put_call")
+            or contract.get("direction")
+            or contract.get("type")
+            or ""
+        ).upper()
+
+        if side == "CALL":
+            calls.append(contract)
+        elif side == "PUT":
+            puts.append(contract)
+        else:
+            other.append(contract)
+
+    return {
+        "total": len(records),
+        "calls": calls,
+        "puts": puts,
+        "other": other,
+    }
 
 API_KEYS = {
     "client_key_001": {
@@ -351,30 +474,30 @@ async def get_quote(
         quote_client = clients["quote"]
 
         # Get quote
-        quote_data = quote_client.get_stock_briefs([request.symbol])
+        quote_data = _normalize_payload(quote_client.get_stock_briefs([request.symbol]))
 
-        if quote_data and len(quote_data) > 0:
-            quote = quote_data[0]
-            return APIResponse(
-                success=True,
-                data={
-                    "symbol": request.symbol,
-                    "latest_price": getattr(quote, 'latest_price', None),
-                    "pre_close": getattr(quote, 'pre_close', None),
-                    "open": getattr(quote, 'open', None),
-                    "high": getattr(quote, 'high', None),
-                    "low": getattr(quote, 'low', None),
-                    "volume": getattr(quote, 'volume', None),
-                    "timestamp": getattr(quote, 'latest_time', None)
-                },
-                account=request.account
-            )
-        else:
+        if not quote_data:
             return APIResponse(
                 success=False,
                 error="No quote data available",
                 account=request.account
             )
+
+        quote = quote_data[0]
+        return APIResponse(
+            success=True,
+            data={
+                "symbol": request.symbol,
+                "latest_price": getattr(quote, 'latest_price', None),
+                "pre_close": getattr(quote, 'pre_close', None),
+                "open": getattr(quote, 'open', None),
+                "high": getattr(quote, 'high', None),
+                "low": getattr(quote, 'low', None),
+                "volume": getattr(quote, 'volume', None),
+                "timestamp": getattr(quote, 'latest_time', None)
+            },
+            account=request.account
+        )
     except Exception as e:
         logger.error(f"Get quote error: {e}")
         return APIResponse(
@@ -405,9 +528,11 @@ async def get_kline(
             limit=request.limit
         )
 
-        if kline_data and len(kline_data) > 0:
+        normalized_bars = _normalize_payload(kline_data)
+
+        if normalized_bars:
             bars = []
-            for item in kline_data:
+            for item in normalized_bars:
                 bars.append({
                     "time": getattr(item, 'time', None),
                     "open": getattr(item, 'open', None),
@@ -455,7 +580,7 @@ async def get_market_data_batch(
         quote_client = clients["quote"]
 
         # Get batch quotes
-        quotes = quote_client.get_stock_briefs(request.symbols)
+        quotes = _normalize_payload(quote_client.get_stock_briefs(request.symbols))
 
         result = {}
         for quote in quotes:
@@ -501,16 +626,17 @@ async def search_symbols(
         quote_client = clients["quote"]
 
         # Search symbols
-        results = quote_client.get_symbol_names(request.keyword, market=request.market)
+        results = _normalize_payload(
+            quote_client.get_symbol_names(request.keyword, market=request.market)
+        )
 
         symbols_list = []
-        if results:
-            for result in results:
-                symbols_list.append({
-                    "symbol": getattr(result, 'symbol', None),
-                    "name": getattr(result, 'name', None),
-                    "market": getattr(result, 'market', None)
-                })
+        for result in results:
+            symbols_list.append({
+                "symbol": getattr(result, 'symbol', None),
+                "name": getattr(result, 'name', None),
+                "market": getattr(result, 'market', None)
+            })
 
         return APIResponse(
             success=True,
@@ -544,13 +670,55 @@ async def get_option_chain(
 
         # Get option chain
         option_data = quote_client.get_option_expirations(request.symbol)
+        normalized_expirations = _normalize_payload(option_data)
+
+        expirations: List[Any] = []
+        for entry in normalized_expirations:
+            if isinstance(entry, SimpleNamespace):
+                value = next(
+                    (
+                        getattr(entry, attr)
+                        for attr in ("expiration", "expiry", "expire_date", "date")
+                        if getattr(entry, attr, None)
+                    ),
+                    None,
+                )
+                if value is not None:
+                    expirations.append(value)
+                else:
+                    expirations.append(entry.__dict__.copy())
+            else:
+                expirations.append(entry)
+
+        chain_details: Optional[Dict[str, Any]] = None
+        if request.expiry:
+            option_chain = quote_client.get_option_chain(
+                request.symbol,
+                request.expiry,
+            )
+            structured_chain = _structure_option_chain(option_chain)
+
+            chain_details = {
+                "expiry": request.expiry,
+                "total": structured_chain["total"],
+                "calls": structured_chain["calls"],
+                "puts": structured_chain["puts"],
+            }
+
+            if structured_chain["other"]:
+                chain_details["other"] = structured_chain["other"]
+
+        response_payload: Dict[str, Any] = {
+            "symbol": request.symbol,
+            "expirations": expirations,
+        }
+
+        if chain_details:
+            response_payload["chain"] = chain_details
 
         return APIResponse(
             success=True,
-            data={
-                "symbol": request.symbol,
-                "expirations": option_data if option_data else []
-            },
+            data=response_payload,
             account=request.account
         )
     except Exception as e:
@@ -1128,7 +1296,8 @@ async def shutdown_event():
 # Main Entry Point
 # ============================================================================
 
-if __name__ == "__main__":
+def run(host: str = "0.0.0.0", port: int = 9000, log_level: str = "info") -> None:
+    """Launch the FastAPI server."""
     logger.info("=" * 80)
     logger.info("Tiger MCP REST API Server - Full Edition v2.0.0")
     logger.info("=" * 80)
@@ -1142,7 +1311,11 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=9000,
-        log_level="info"
+        host=host,
+        port=port,
+        log_level=log_level
     )
+
+
+if __name__ == "__main__":
+    run()

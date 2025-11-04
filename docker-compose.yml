@@ -82,6 +82,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
       - DEBUG=${DEBUG:-false}
+      - TIGER_REST_API_URL=${TIGER_REST_API_URL:-http://rest-api:9000}
     volumes:
       - ./logs:/app/logs
     ports:
@@ -93,6 +94,8 @@ services:
         condition: service_healthy
       db-migrate:
         condition: service_completed_successfully
+      rest-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -132,6 +135,31 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - tiger-mcp-network
+    restart: unless-stopped
+
+  # Tiger REST API
+  rest-api:
+    build:
+      context: .
+      dockerfile: ./docker/rest-api/Dockerfile
+      target: production
+    container_name: tiger-mcp-rest-api
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./logs:/app/logs
+      - ./tiger_openapi_config.properties:/app/tiger_openapi_config.properties:ro
+      - ./tiger_openapi_token.properties:/app/tiger_openapi_token.properties:ro
+    ports:
+      - "${REST_API_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - tiger-mcp-network
     restart: unless-stopped
