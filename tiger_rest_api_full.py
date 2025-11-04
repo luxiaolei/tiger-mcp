@@ -611,12 +611,31 @@ async def get_option_chain(
 
         # Get option chain
         option_data = quote_client.get_option_expirations(request.symbol)
+        normalized_expirations = _normalize_payload(option_data)
+
+        expirations: List[Any] = []
+        for entry in normalized_expirations:
+            if isinstance(entry, SimpleNamespace):
+                value = next(
+                    (
+                        getattr(entry, attr)
+                        for attr in ("expiration", "expiry", "expire_date", "date")
+                        if getattr(entry, attr, None)
+                    ),
+                    None,
+                )
+                if value is not None:
+                    expirations.append(value)
+                else:
+                    expirations.append(entry.__dict__.copy())
+            else:
+                expirations.append(entry)
 
         return APIResponse(
             success=True,
             data={
                 "symbol": request.symbol,
-                "expirations": option_data if option_data else []
+                "expirations": expirations
             },
             account=request.account
         )
