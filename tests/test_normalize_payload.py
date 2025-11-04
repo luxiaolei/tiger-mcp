@@ -18,6 +18,27 @@ class DummyDataFrame:
         return self._rows
 
 
+class AmbiguousRecords:
+    """Iterable that raises on truthiness, mimicking pandas.DataFrame behaviour."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def __iter__(self):
+        return iter(self._rows)
+
+    def __bool__(self):
+        raise ValueError("The truth value of a DataFrame is ambiguous")
+
+
+class AmbiguousDataFrame(DummyDataFrame):
+    """DataFrame variant that surfaces ambiguous truthiness via to_dict return."""
+
+    def to_dict(self, orient=None):
+        base = super().to_dict(orient=orient)
+        return AmbiguousRecords(base)
+
+
 class DictLikeToDict:
     """Simulates objects that only support a zero-argument to_dict()."""
 
@@ -76,6 +97,19 @@ def test_normalize_dataframe_like_object():
     assert len(result) == 2
     assert result[1].symbol == "MSFT"
     assert result[1].price == pytest.approx(411.29)
+
+
+def test_normalize_dataframe_with_ambiguous_truthiness():
+    payload = AmbiguousDataFrame(
+        [
+            {"symbol": "NVDA", "price": 118.45},
+            {"symbol": "AMD", "price": 31.84},
+        ]
+    )
+
+    result = _normalize_payload(payload)
+
+    assert [item.symbol for item in result] == ["NVDA", "AMD"]
 
 
 def test_normalize_to_dict_without_orient():

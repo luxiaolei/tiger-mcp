@@ -48,6 +48,29 @@ def _to_namespace(item: Any) -> Any:
     return item
 
 
+def _coerce_iterable(obj: Any) -> List[Any]:
+    """Ensure arbitrary objects become list-like without triggering truthiness checks."""
+    if obj is None:
+        return []
+
+    if isinstance(obj, list):
+        return obj
+
+    if isinstance(obj, tuple):
+        return list(obj)
+
+    if isinstance(obj, dict):
+        return [obj]
+
+    if isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
+        try:
+            return list(obj)
+        except TypeError:
+            return [obj]
+
+    return [obj]
+
+
 def _normalize_payload(payload: Any) -> List[Any]:
     """Normalize Tiger SDK responses into iterable collections we can inspect safely."""
     if payload is None:
@@ -67,15 +90,16 @@ def _normalize_payload(payload: Any) -> List[Any]:
         except TypeError:
             records = to_dict()
 
-        if isinstance(records, dict):
-            records = [records]
-        elif records is None:
-            records = []
+        except ValueError as exc:
+            if "truth value of a DataFrame is ambiguous" in str(exc):
+                records = to_dict(orient="records")
+            else:
+                raise
 
-        return [_to_namespace(record) for record in (records or [])]
+        return [_to_namespace(record) for record in _coerce_iterable(records)]
 
     if isinstance(payload, Iterable) and not isinstance(payload, (str, bytes)):
-        return [_to_namespace(item) for item in list(payload)]
+        return [_to_namespace(item) for item in _coerce_iterable(payload)]
 
     return [_to_namespace(payload)]
 
