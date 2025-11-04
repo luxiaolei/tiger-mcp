@@ -6,8 +6,10 @@ Tiger MCP REST API Server - Full Version with Token Refresh
 
 import asyncio
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import uvicorn
@@ -38,6 +40,44 @@ security = HTTPBearer()
 # ============================================================================
 # Configuration
 # ============================================================================
+
+def _to_namespace(item: Any) -> Any:
+    """Convert dictionaries to SimpleNamespace for attribute-style access."""
+    if isinstance(item, dict):
+        return SimpleNamespace(**item)
+    return item
+
+
+def _normalize_payload(payload: Any) -> List[Any]:
+    """Normalize Tiger SDK responses into iterable collections we can inspect safely."""
+    if payload is None:
+        return []
+
+    if isinstance(payload, (list, tuple)):
+        return [_to_namespace(obj) for obj in payload]
+
+    if isinstance(payload, dict):
+        return [_to_namespace(payload)]
+
+    # Handle pandas DataFrames or other objects exposing to_dict()
+    to_dict = getattr(payload, "to_dict", None)
+    if callable(to_dict):
+        try:
+            records = to_dict(orient="records")  # pandas.DataFrame signature
+        except TypeError:
+            records = to_dict()
+
+        if isinstance(records, dict):
+            records = [records]
+        elif records is None:
+            records = []
+
+        return [_to_namespace(record) for record in (records or [])]
+
+    if isinstance(payload, Iterable) and not isinstance(payload, (str, bytes)):
+        return [_to_namespace(item) for item in list(payload)]
+
+    return [_to_namespace(payload)]
 
 API_KEYS = {
     "client_key_001": {
@@ -351,30 +391,30 @@ async def get_quote(
         quote_client = clients["quote"]
 
         # Get quote
-        quote_data = quote_client.get_stock_briefs([request.symbol])
+        quote_data = _normalize_payload(quote_client.get_stock_briefs([request.symbol]))
 
-        if quote_data and len(quote_data) > 0:
-            quote = quote_data[0]
-            return APIResponse(
-                success=True,
-                data={
-                    "symbol": request.symbol,
-                    "latest_price": getattr(quote, 'latest_price', None),
-                    "pre_close": getattr(quote, 'pre_close', None),
-                    "open": getattr(quote, 'open', None),
-                    "high": getattr(quote, 'high', None),
-                    "low": getattr(quote, 'low', None),
-                    "volume": getattr(quote, 'volume', None),
-                    "timestamp": getattr(quote, 'latest_time', None)
-                },
-                account=request.account
-            )
-        else:
+        if not quote_data:
             return APIResponse(
                 success=False,
                 error="No quote data available",
                 account=request.account
             )
+
+        quote = quote_data[0]
+        return APIResponse(
+            success=True,
+            data={
+                "symbol": request.symbol,
+                "latest_price": getattr(quote, 'latest_price', None),
+                "pre_close": getattr(quote, 'pre_close', None),
+                "open": getattr(quote, 'open', None),
+                "high": getattr(quote, 'high', None),
+                "low": getattr(quote, 'low', None),
+                "volume": getattr(quote, 'volume', None),
+                "timestamp": getattr(quote, 'latest_time', None)
+            },
+            account=request.account
+        )
     except Exception as e:
         logger.error(f"Get quote error: {e}")
         return APIResponse(
@@ -405,9 +445,11 @@ async def get_kline(
             limit=request.limit
         )
 
-        if kline_data and len(kline_data) > 0:
+        normalized_bars = _normalize_payload(kline_data)
+
+        if normalized_bars:
             bars = []
-            for item in kline_data:
+            for item in normalized_bars:
                 bars.append({
                     "time": getattr(item, 'time', None),
                     "open": getattr(item, 'open', None),
@@ -455,7 +497,7 @@ async def get_market_data_batch(
         quote_client = clients["quote"]
 
         # Get batch quotes
-        quotes = quote_client.get_stock_briefs(request.symbols)
+        quotes = _normalize_payload(quote_client.get_stock_briefs(request.symbols))
 
         result = {}
         for quote in quotes:
@@ -501,16 +543,17 @@ async def search_symbols(
         quote_client = clients["quote"]
 
         # Search symbols
-        results = quote_client.get_symbol_names(request.keyword, market=request.market)
+        results = _normalize_payload(
+            quote_client.get_symbol_names(request.keyword, market=request.market)
+        )
 
         symbols_list = []
-        if results:
-            for result in results:
-                symbols_list.append({
-                    "symbol": getattr(result, 'symbol', None),
-                    "name": getattr(result, 'name', None),
-                    "market": getattr(result, 'market', None)
-                })
+        for result in results:
+            symbols_list.append({
+                "symbol": getattr(result, 'symbol', None),
+                "name": getattr(result, 'name', None),
+                "market": getattr(result, 'market', None)
+            })
 
         return APIResponse(
             success=True,
