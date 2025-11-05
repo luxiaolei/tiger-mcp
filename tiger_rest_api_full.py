@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -284,7 +284,10 @@ class PlaceOrderRequest(BaseModel):
     limit_price: Optional[float] = None
     stop_price: Optional[float] = None
     time_in_force: str = "DAY"  # DAY, GTC, IOC, FOK
-    outside_rth: bool = False
+    outside_rth: Optional[bool] = Field(
+        default=None,
+        description="Allow execution outside regular trading hours; defaults to True for market orders when omitted."
+    )
 
 class ModifyOrderRequest(BaseModel):
     """Modify order request"""
@@ -344,6 +347,101 @@ def get_tiger_client(account: str):
         "trade": TradeClient(config),
         "quote": QuoteClient(config)
     }
+
+
+def _extract_order_summary(order_obj: Any) -> Optional[Dict[str, Any]]:
+    """Convert Tiger SDK Order objects to a serializable summary."""
+    if not order_obj:
+        return None
+
+    try:
+        contract = getattr(order_obj, "contract", None)
+        contract_symbol = getattr(contract, "symbol", None) if contract else None
+        raw_sub_orders = getattr(order_obj, "orders", None)
+        sub_orders = None
+        if raw_sub_orders:
+            sub_orders = []
+            for sub_order in raw_sub_orders:
+                sub_summary = _extract_order_summary(sub_order)
+                if sub_summary:
+                    sub_orders.append(sub_summary)
+
+        return {
+            "global_order_id": getattr(order_obj, "id", None),
+            "account_order_id": getattr(order_obj, "order_id", None),
+            "symbol": getattr(order_obj, "symbol", None) or contract_symbol,
+            "action": getattr(order_obj, "action", None),
+            "order_type": getattr(order_obj, "order_type", None),
+            "quantity": getattr(order_obj, "quantity", None),
+            "filled": getattr(order_obj, "filled", None),
+            "remaining": getattr(order_obj, "remaining", None),
+            "avg_fill_price": getattr(order_obj, "avg_fill_price", None),
+            "limit_price": getattr(order_obj, "limit_price", None),
+            "stop_price": getattr(order_obj, "aux_price", None),
+            "time_in_force": getattr(order_obj, "time_in_force", None),
+            "outside_rth": getattr(order_obj, "outside_rth", None),
+            "status": getattr(order_obj, "status", None),
+            "order_time": getattr(order_obj, "order_time", None),
+            "update_time": getattr(order_obj, "update_time", None),
+            "filled_cash_amount": getattr(order_obj, "filled_cash_amount", None),
+            "commission": getattr(order_obj, "commission", None),
+            "realized_pnl": getattr(order_obj, "realized_pnl", None),
+            "sub_orders": sub_orders,
+        }
+    except Exception as exc:
+        logger.warning(f"Failed to serialize order object: {exc}")
+        return None
+
+
+def _fetch_order_details(
+    trade_client: Any,
+    account: str,
+    identifier: Optional[Union[str, int]],
+    fallback_global_id: Optional[int] = None,
+):
+    """
+    Retrieve order details by trying both global and account-specific identifiers.
+
+    Args:
+        trade_client: Tiger trade client
+        account: Account number string
+        identifier: ID supplied by caller (global or account-specific)
+        fallback_global_id: Optional integer ID already known (e.g., from SDK response)
+    """
+    candidate_ids = []
+
+    if fallback_global_id:
+        candidate_ids.append(("id", fallback_global_id))
+
+    if identifier:
+        numeric_id = None
+        try:
+            numeric_id = int(identifier)
+            candidate_ids.append(("id", numeric_id))
+        except (TypeError, ValueError):
+            numeric_id = None
+
+        candidate_ids.append(("order_id", str(identifier)))
+
+    attempted = []
+    for key, value in candidate_ids:
+        if value is None:
+            continue
+        try:
+            if key == "id":
+                return trade_client.get_order(account=account, id=value)
+            return trade_client.get_order(account=account, order_id=value)
+        except Exception as exc:
+            attempted.append(f"{key}={value} ({exc})")
+
+    if attempted:
+        logger.warning(
+            "Unable to fetch order details for account %s using identifiers: %s",
+            account,
+            "; ".join(attempted),
+        )
+    return None
+
 
 # ============================================================================
 # Health & System Endpoints
@@ -1125,20 +1223,59 @@ async def place_order(
 
         # Set time in force
         order.time_in_force = request.time_in_force
-        order.outside_rth = request.outside_rth
+        outside_rth = request.outside_rth
+        if outside_rth is None:
+            outside_rth = request.order_type == "MKT"
+        order.outside_rth = bool(outside_rth)
 
         # Place order
         order_id = trade_client.place_order(order)
 
+        # Attempt to include enriched order metadata
+        order_summary = _extract_order_summary(order) or {}
+
+        if not order_summary.get("status") or order_summary.get("status") == "NEW":
+            fetched_order = _fetch_order_details(
+                trade_client,
+                request.account,
+                identifier=order_summary.get("account_order_id"),
+                fallback_global_id=order_id,
+            )
+            if fetched_order:
+                fetched_summary = _extract_order_summary(fetched_order)
+                if fetched_summary:
+                    order_summary = fetched_summary
+
+        outside_rth_value = order_summary.get("outside_rth")
+        if outside_rth_value is None:
+            outside_rth_value = bool(outside_rth)
+
+        response_payload = {
+            "order_id": order_id,
+            "account_order_id": order_summary.get("account_order_id"),
+            "symbol": order_summary.get("symbol") or request.symbol,
+            "action": order_summary.get("action") or request.action,
+            "order_type": order_summary.get("order_type") or request.order_type,
+            "quantity": order_summary.get("quantity") or request.quantity,
+            "status": order_summary.get("status"),
+            "filled": order_summary.get("filled"),
+            "remaining": order_summary.get("remaining"),
+            "avg_fill_price": order_summary.get("avg_fill_price"),
+            "limit_price": order_summary.get("limit_price") or request.limit_price,
+            "stop_price": order_summary.get("stop_price") or request.stop_price,
+            "time_in_force": order_summary.get("time_in_force") or request.time_in_force,
+            "outside_rth": outside_rth_value,
+            "order_time": order_summary.get("order_time"),
+            "update_time": order_summary.get("update_time"),
+            "commission": order_summary.get("commission"),
+            "realized_pnl": order_summary.get("realized_pnl"),
+            "filled_cash_amount": order_summary.get("filled_cash_amount"),
+            "status_details": order_summary.get("sub_orders"),
+        }
+
         return APIResponse(
             success=True,
-            data={
-                "order_id": order_id,
-                "symbol": request.symbol,
-                "action": request.action,
-                "order_type": request.order_type,
-                "quantity": request.quantity
-            },
+            data=response_payload,
             account=request.account
         )
     except Exception as e:
@@ -1162,17 +1299,97 @@ async def modify_order(
         clients = get_tiger_client(request.account)
         trade_client = clients["trade"]
 
-        # Modify order
-        result = trade_client.modify_order(
-            order_id=request.order_id,
-            quantity=request.quantity,
-            limit_price=request.limit_price,
-            stop_price=request.stop_price
+        if all(
+            value is None
+            for value in (request.quantity, request.limit_price, request.stop_price)
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="At least one of quantity, limit_price, or stop_price must be provided",
+            )
+
+        # Fetch existing order details
+        existing_order = _fetch_order_details(
+            trade_client,
+            request.account,
+            identifier=request.order_id,
         )
+
+        if not existing_order:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Order {request.order_id} not found for account {request.account}",
+            )
+
+        modify_kwargs: Dict[str, Any] = {}
+        if request.quantity is not None:
+            modify_kwargs["quantity"] = request.quantity
+        if request.limit_price is not None:
+            modify_kwargs["limit_price"] = request.limit_price
+        if request.stop_price is not None:
+            modify_kwargs["aux_price"] = request.stop_price
+
+        # Modify order with correct Tiger SDK signature
+        modify_result = trade_client.modify_order(
+            existing_order,
+            **modify_kwargs,
+        )
+
+        updated_order = _fetch_order_details(
+            trade_client,
+            request.account,
+            identifier=request.order_id,
+            fallback_global_id=modify_result or getattr(existing_order, "id", None),
+        )
+
+        if not updated_order:
+            updated_order = existing_order
+
+        order_summary = _extract_order_summary(updated_order) or {}
+        modified_fields = {
+            key: value
+            for key, value in (
+                ("quantity", request.quantity),
+                ("limit_price", request.limit_price),
+                ("stop_price", request.stop_price),
+            )
+            if value is not None
+        }
+
+        response_payload = {
+            "order_id": order_summary.get("global_order_id")
+            or modify_result
+            or getattr(existing_order, "id", None),
+            "account_order_id": order_summary.get("account_order_id"),
+            "requested_order_id": request.order_id,
+            "status": order_summary.get("status"),
+            "symbol": order_summary.get("symbol"),
+            "action": order_summary.get("action"),
+            "order_type": order_summary.get("order_type"),
+            "quantity": order_summary.get("quantity"),
+            "filled": order_summary.get("filled"),
+            "remaining": order_summary.get("remaining"),
+            "avg_fill_price": order_summary.get("avg_fill_price"),
+            "limit_price": order_summary.get("limit_price"),
+            "stop_price": order_summary.get("stop_price"),
+            "time_in_force": order_summary.get("time_in_force"),
+            "outside_rth": order_summary.get("outside_rth"),
+            "order_time": order_summary.get("order_time"),
+            "update_time": order_summary.get("update_time"),
+            "commission": order_summary.get("commission"),
+            "realized_pnl": order_summary.get("realized_pnl"),
+            "filled_cash_amount": order_summary.get("filled_cash_amount"),
+            "status_details": order_summary.get("sub_orders"),
+            "modified_fields": modified_fields,
+            "modify_reference_id": modify_result,
+        }
+
+        if modify_result is not None:
+            response_payload["result"] = modify_result
 
         return APIResponse(
             success=True,
-            data={"order_id": request.order_id, "result": result},
+            data=response_payload,
             account=request.account
         )
     except Exception as e:

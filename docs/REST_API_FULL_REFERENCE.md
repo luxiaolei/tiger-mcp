@@ -652,7 +652,7 @@ POST /api/trade/place-order
   "quantity": 100,
   "limit_price": 175.00,
   "time_in_force": "DAY",
-  "outside_rth": false
+  "outside_rth": true
 }
 ```
 
@@ -664,16 +664,33 @@ POST /api/trade/place-order
 
 **Time in Force:** `DAY`, `GTC`, `IOC`, `FOK`
 
+**Note:** `outside_rth` is optional. When omitted, market orders default to `true` so they can execute during extended hours.
+
 **Response:**
 ```json
 {
   "success": true,
   "data": {
-    "order_id": "12345678",
+    "order_id": "40139406481165312",
+    "account_order_id": "1024",
     "symbol": "AAPL",
     "action": "BUY",
     "order_type": "LMT",
-    "quantity": 100
+    "quantity": 100,
+    "status": "Submitted",
+    "filled": 0,
+    "remaining": 100,
+    "avg_fill_price": null,
+    "limit_price": 175.00,
+    "stop_price": null,
+    "time_in_force": "DAY",
+    "outside_rth": true,
+    "order_time": 1755073344000,
+    "update_time": 1755073344000,
+    "commission": 0.0,
+    "realized_pnl": 0.0,
+    "filled_cash_amount": 0.0,
+    "status_details": null
   },
   "account": "67686635",
   "timestamp": "2025-10-29T12:00:00"
@@ -695,13 +712,40 @@ POST /api/trade/modify-order
 }
 ```
 
+**Note:** At least one of `quantity`, `limit_price`, or `stop_price` must be supplied.
+
 **Response:**
 ```json
 {
   "success": true,
   "data": {
-    "order_id": "12345678",
-    "result": "success"
+    "order_id": "40139406481165312",
+    "account_order_id": "1024",
+    "requested_order_id": "12345678",
+    "status": "Submitted",
+    "symbol": "AAPL",
+    "action": "BUY",
+    "order_type": "LMT",
+    "quantity": 150,
+    "filled": 0,
+    "remaining": 150,
+    "avg_fill_price": null,
+    "limit_price": 174.00,
+    "stop_price": null,
+    "time_in_force": "DAY",
+    "outside_rth": true,
+    "order_time": 1755073344000,
+    "update_time": 1755073361000,
+    "commission": 0.0,
+    "realized_pnl": 0.0,
+    "filled_cash_amount": 0.0,
+    "status_details": null,
+    "modified_fields": {
+      "quantity": 150,
+      "limit_price": 174.00
+    },
+    "modify_reference_id": "40139406481165312",
+    "result": "40139406481165312"
   },
   "account": "67686635",
   "timestamp": "2025-10-29T12:00:00"
