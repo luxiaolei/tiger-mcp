@@ -172,6 +172,12 @@ POST /api/token/refresh
 
 ### Market Data Endpoints (6)
 
+> ⚠️ **Tiger market entitlements required**
+> - 使用 `/api/market/quote`、`/api/market/kline`、`/api/market/batch` 查询美股时，帐户和设备必须具备 **US market** 实时行情权限，否则 Tiger 会返回 `code=4000 permission denied`。
+> - `/api/market/option-chain` 在不带 `expiry` 时可以获取到期日列表；如果需要传入 `expiry` 拿到具体合约，必须开通 **US option quote** 权限，否则会同样收到 `code=4000`。
+> - 接口目前只支持美股代码；例如传入 `00700` 会得到 `code=1010 ... is not US stock symbol`。
+> - 若当前权限不足，建议先用拥有对应市场权限的帐户测试，再联系 Tiger Brokers 开通需要的行情/期权权限。
+
 #### 1. Get Real-Time Quote
 ```
 POST /api/market/quote
