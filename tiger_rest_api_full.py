@@ -429,10 +429,40 @@ def _fetch_order_details(
             continue
         try:
             if key == "id":
-                return trade_client.get_order(account=account, id=value)
-            return trade_client.get_order(account=account, order_id=value)
+                order_result = trade_client.get_order(account=account, id=value)
+            else:
+                order_result = trade_client.get_order(account=account, order_id=value)
+
+            if order_result:
+                return order_result
+
+            attempted.append(f"{key}={value} (empty)")
         except Exception as exc:
             attempted.append(f"{key}={value} ({exc})")
+
+    # Fallback: scan recent orders when direct lookup fails (handles account-level IDs)
+    try:
+        orders = trade_client.get_orders(account=account)
+        if orders:
+            identifier_str = str(identifier) if identifier is not None else None
+            fallback_global_str = (
+                str(fallback_global_id) if fallback_global_id is not None else None
+            )
+
+            for order_obj in orders:
+                order_id_value = getattr(order_obj, "order_id", None)
+                global_id_value = getattr(order_obj, "id", None)
+
+                if identifier_str and str(order_id_value) == identifier_str:
+                    return order_obj
+
+                if identifier_str and str(global_id_value) == identifier_str:
+                    return order_obj
+
+                if fallback_global_str and str(global_id_value) == fallback_global_str:
+                    return order_obj
+    except Exception as exc:
+        attempted.append(f"orders_scan ({exc})")
 
     if attempted:
         logger.warning(
@@ -1414,11 +1444,100 @@ async def cancel_order(
         trade_client = clients["trade"]
 
         # Cancel order
-        result = trade_client.cancel_order(id=request.order_id)
+        existing_order = _fetch_order_details(
+            trade_client,
+            request.account,
+            identifier=request.order_id,
+        )
+
+        if not existing_order:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Order {request.order_id} not found for account {request.account}",
+            )
+
+        order_summary = _extract_order_summary(existing_order) or {}
+
+        # Prepare cancel parameters supporting both global and account-level IDs
+        cancel_kwargs: Dict[str, Any] = {"account": request.account}
+
+        global_order_id = order_summary.get("global_order_id")
+        account_order_id = order_summary.get("account_order_id")
+
+        provided_numeric_id: Optional[int] = None
+        try:
+            provided_numeric_id = int(request.order_id)
+        except (TypeError, ValueError):
+            provided_numeric_id = None
+
+        if global_order_id:
+            try:
+                cancel_kwargs["id"] = int(global_order_id)
+            except (TypeError, ValueError):
+                pass
+
+        if account_order_id not in (None, ""):
+            try:
+                cancel_kwargs["order_id"] = int(account_order_id)
+            except (TypeError, ValueError):
+                cancel_kwargs["order_id"] = str(account_order_id)
+
+        # If we still don't have an identifier, fall back to caller-provided numeric
+        if "id" not in cancel_kwargs and provided_numeric_id is not None:
+            cancel_kwargs["id"] = provided_numeric_id
+
+        cancel_result = trade_client.cancel_order(**cancel_kwargs)
+
+        cancel_reference_id: Optional[int] = None
+        if isinstance(cancel_result, bool):
+            cancel_reference_id = None
+        elif isinstance(cancel_result, int):
+            cancel_reference_id = cancel_result
+        elif isinstance(cancel_result, str) and cancel_result.isdigit():
+            cancel_reference_id = int(cancel_result)
+
+        # Refresh order status after cancellation
+        refreshed_order = _fetch_order_details(
+            trade_client,
+            request.account,
+            identifier=account_order_id or request.order_id,
+            fallback_global_id=cancel_reference_id or global_order_id,
+        )
+
+        if refreshed_order:
+            order_summary = _extract_order_summary(refreshed_order) or order_summary
+
+        response_payload = {
+            "order_id": order_summary.get("global_order_id")
+            or cancel_result
+            or global_order_id
+            or request.order_id,
+            "account_order_id": order_summary.get("account_order_id") or account_order_id,
+            "requested_order_id": request.order_id,
+            "status": order_summary.get("status"),
+            "symbol": order_summary.get("symbol"),
+            "action": order_summary.get("action"),
+            "order_type": order_summary.get("order_type"),
+            "quantity": order_summary.get("quantity"),
+            "filled": order_summary.get("filled"),
+            "remaining": order_summary.get("remaining"),
+            "avg_fill_price": order_summary.get("avg_fill_price"),
+            "limit_price": order_summary.get("limit_price"),
+            "stop_price": order_summary.get("stop_price"),
+            "time_in_force": order_summary.get("time_in_force"),
+            "outside_rth": order_summary.get("outside_rth"),
+            "order_time": order_summary.get("order_time"),
+            "update_time": order_summary.get("update_time"),
+            "commission": order_summary.get("commission"),
+            "realized_pnl": order_summary.get("realized_pnl"),
+            "filled_cash_amount": order_summary.get("filled_cash_amount"),
+            "status_details": order_summary.get("sub_orders"),
+            "cancel_reference_id": cancel_reference_id or global_order_id,
+        }
 
         return APIResponse(
             success=True,
-            data={"order_id": request.order_id, "result": result},
+            data=response_payload,
             account=request.account
         )
     except Exception as e:

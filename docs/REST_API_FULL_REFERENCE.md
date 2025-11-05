@@ -765,13 +765,35 @@ POST /api/trade/cancel-order
 }
 ```
 
+**Note:** You can supply either the global order ID (long numeric value returned by the Tiger API) or the account-specific incremental order ID shown in `get_orders`.
+
 **Response:**
 ```json
 {
   "success": true,
   "data": {
-    "order_id": "12345678",
-    "result": "success"
+    "order_id": "40139406481165312",
+    "account_order_id": "12345678",
+    "requested_order_id": "12345678",
+    "status": "Cancelled",
+    "symbol": "AAPL",
+    "action": "BUY",
+    "order_type": "LMT",
+    "quantity": 150,
+    "filled": 0,
+    "remaining": 150,
+    "avg_fill_price": null,
+    "limit_price": 174.00,
+    "stop_price": null,
+    "time_in_force": "DAY",
+    "outside_rth": true,
+    "order_time": 1755073344000,
+    "update_time": 1755073600000,
+    "commission": 0.0,
+    "realized_pnl": 0.0,
+    "filled_cash_amount": 0.0,
+    "status_details": null,
+    "cancel_reference_id": "40139406481165312"
   },
   "account": "67686635",
   "timestamp": "2025-10-29T12:00:00"
