@@ -668,8 +668,11 @@ async def get_option_chain(
         clients = get_tiger_client(request.account)
         quote_client = clients["quote"]
 
-        # Get option chain
-        option_data = quote_client.get_option_expirations(request.symbol)
+        # Tiger SDK expects a sequence of symbols; wrap the incoming symbol
+        symbols = [request.symbol]
+
+        # Get option chain expirations for the requested symbol
+        option_data = quote_client.get_option_expirations(symbols)
         normalized_expirations = _normalize_payload(option_data)
 
         expirations: List[Any] = []
@@ -742,15 +745,27 @@ async def get_market_status(
         clients = get_tiger_client(request.account)
         quote_client = clients["quote"]
 
-        # Get market status
+        # Get market status (Tiger SDK returns a domain object that is not JSON serializable)
         status = quote_client.get_market_status(market=request.market)
+
+        normalized_status = _normalize_payload(status)
+
+        if not normalized_status:
+            status_payload: Any = {"market": request.market, "status": "Unknown"}
+        elif len(normalized_status) == 1:
+            status_payload = {
+                "market": request.market,
+                **_to_plain_dict(normalized_status[0])
+            }
+        else:
+            status_payload = {
+                "market": request.market,
+                "statuses": [_to_plain_dict(item) for item in normalized_status]
+            }
 
         return APIResponse(
             success=True,
-            data={
-                "market": request.market,
-                "status": status if status else "Unknown"
-            },
+            data=status_payload,
             account=request.account
         )
     except Exception as e:
