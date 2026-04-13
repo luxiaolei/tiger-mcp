@@ -131,6 +131,40 @@ def _to_plain_dict(item: Any) -> Dict[str, Any]:
     return attributes if attributes else {"value": item}
 
 
+def _clean_numeric(value: Any) -> Any:
+    """Return ints for whole numbers, floats for fractional numeric values."""
+    if value is None or isinstance(value, bool):
+        return value
+
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return value
+
+    if numeric.is_integer():
+        return int(numeric)
+
+    return numeric
+
+
+def _normalize_position_quantity(position: Any) -> Any:
+    """Prefer Tiger's decoded position quantity for fractional-share holdings."""
+    position_qty = getattr(position, "position_qty", None)
+    if position_qty is not None:
+        return _clean_numeric(position_qty)
+
+    raw_quantity = getattr(position, "quantity", 0)
+    position_scale = getattr(position, "position_scale", None)
+
+    if position_scale not in (None, 0):
+        try:
+            return _clean_numeric(raw_quantity / (10 ** int(position_scale)))
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+
+    return _clean_numeric(raw_quantity)
+
+
 def _structure_option_chain(chain_payload: Any) -> Dict[str, Any]:
     """Split option chain payload into calls, puts, and miscellaneous contracts."""
     records = _normalize_payload(chain_payload)
@@ -1063,14 +1097,17 @@ async def get_positions(
         positions_data = []
         if positions:
             for pos in positions:
+                normalized_quantity = _normalize_position_quantity(pos)
                 positions_data.append({
                     "symbol": getattr(pos.contract, 'symbol', 'Unknown') if hasattr(pos, 'contract') else 'Unknown',
-                    "quantity": getattr(pos, 'quantity', 0),
+                    "quantity": normalized_quantity,
+                    "quantity_raw": getattr(pos, 'quantity', 0),
+                    "quantity_scale": getattr(pos, 'position_scale', 0),
                     "average_cost": getattr(pos, 'average_cost', 0),
                     "market_price": getattr(pos, 'market_price', 0),
                     "market_value": getattr(pos, 'market_value', 0),
                     "unrealized_pnl": getattr(pos, 'unrealized_pnl', 0) if hasattr(pos, 'unrealized_pnl') else
-                                     (getattr(pos, 'market_price', 0) - getattr(pos, 'average_cost', 0)) * getattr(pos, 'quantity', 0)
+                                     (getattr(pos, 'market_price', 0) - getattr(pos, 'average_cost', 0)) * normalized_quantity
                 })
 
         return APIResponse(

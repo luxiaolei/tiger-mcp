@@ -2,9 +2,13 @@
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
+import tiger_rest_api_full
 from tiger_rest_api_full import (
+    app,
     _normalize_payload,
+    _normalize_position_quantity,
     _structure_option_chain,
     _to_plain_dict,
 )
@@ -189,3 +193,83 @@ def test_structure_option_chain_splits_calls_puts_other():
     assert [c["strike"] for c in structured["calls"]] == [100]
     assert [p["strike"] for p in structured["puts"]] == [110]
     assert [o["strike"] for o in structured["other"]] == [120]
+
+
+class DummyTradeClient:
+    def __init__(self, positions):
+        self._positions = positions
+
+    def get_positions(self):
+        return self._positions
+
+
+def test_normalize_position_quantity_prefers_decoded_position_qty():
+    position = SimpleNamespace(
+        quantity=100067952,
+        position_qty=1000.67952,
+        position_scale=5,
+    )
+
+    assert _normalize_position_quantity(position) == pytest.approx(1000.67952)
+
+
+def test_normalize_position_quantity_falls_back_to_scaled_raw_quantity():
+    position = SimpleNamespace(quantity=12345, position_scale=2)
+
+    assert _normalize_position_quantity(position) == pytest.approx(123.45)
+
+
+def test_positions_endpoint_returns_normalized_fractional_quantity(monkeypatch):
+    positions = [
+        SimpleNamespace(
+            contract=SimpleNamespace(symbol="DUOL"),
+            quantity=100067952,
+            position_qty=1000.67952,
+            position_scale=5,
+            average_cost=256.0827,
+            market_price=89.82,
+            market_value=89881.0345,
+            unrealized_pnl=-166375.65,
+        ),
+        SimpleNamespace(
+            contract=SimpleNamespace(symbol="09961"),
+            quantity=250,
+            position_qty=250.0,
+            position_scale=0,
+            average_cost=471.9319,
+            market_price=397.2,
+            market_value=99300.0,
+            unrealized_pnl=-18682.97,
+        ),
+    ]
+
+    monkeypatch.setattr(
+        tiger_rest_api_full,
+        "get_tiger_client",
+        lambda account: {"trade": DummyTradeClient(positions)},
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/trade/positions",
+        headers={"Authorization": "Bearer client_key_001"},
+        json={"account": "67686635"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+
+    returned_positions = payload["data"]["positions"]
+    duol = next(
+        position for position in returned_positions if position["symbol"] == "DUOL"
+    )
+    hk = next(
+        position for position in returned_positions if position["symbol"] == "09961"
+    )
+
+    assert duol["quantity"] == pytest.approx(1000.67952)
+    assert duol["quantity_raw"] == 100067952
+    assert duol["quantity_scale"] == 5
+    assert hk["quantity"] == 250
+    assert isinstance(hk["quantity"], int)

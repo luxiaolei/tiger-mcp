@@ -113,6 +113,40 @@ class TradingToolsService:
 _trading_service = TradingToolsService()
 
 
+def _clean_numeric(value: Any) -> Any:
+    """Return ints for whole numbers, floats for fractional numeric values."""
+    if value is None or isinstance(value, bool):
+        return value
+
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return value
+
+    if numeric.is_integer():
+        return int(numeric)
+
+    return numeric
+
+
+def _normalize_position_quantity(position: Any) -> Any:
+    """Prefer Tiger's decoded position quantity for fractional-share holdings."""
+    position_qty = getattr(position, "position_qty", None)
+    if position_qty is not None:
+        return _clean_numeric(position_qty)
+
+    raw_quantity = getattr(position, "quantity", 0)
+    position_scale = getattr(position, "position_scale", None)
+
+    if position_scale not in (None, 0):
+        try:
+            return _clean_numeric(raw_quantity / (10 ** int(position_scale)))
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+
+    return _clean_numeric(raw_quantity)
+
+
 @mcp.tool()
 async def tiger_get_positions(account_id: Optional[str] = None) -> PositionsResponse:
     """
@@ -171,7 +205,9 @@ async def tiger_get_positions(account_id: Optional[str] = None) -> PositionsResp
             for position in result:
                 position_data = {
                     "symbol": getattr(position, "symbol", ""),
-                    "quantity": getattr(position, "quantity", 0),
+                    "quantity": _normalize_position_quantity(position),
+                    "quantity_raw": getattr(position, "quantity", 0),
+                    "quantity_scale": getattr(position, "position_scale", 0),
                     "market_value": getattr(position, "market_value", 0.0),
                     "average_cost": getattr(position, "average_cost", 0.0),
                     "unrealized_pnl": getattr(position, "unrealized_pnl", 0.0),
